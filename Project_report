@@ -1,0 +1,526 @@
+# 📋 BÁO CÁO DỰ ÁN
+# Hệ Thống Tự Động Hóa Trích Xuất Hóa Đơn Mua Hàng
+**(Procurement Receipt OCR & Automation System)**
+
+**Phiên bản:** 2.0  
+**Ngày lập báo cáo:** 14/08/2026  
+**Trạng thái:** Đã triển khai và vận hành thực tế
+
+---
+
+## Mục Lục
+
+1. [Giới Thiệu Dự Án](#1-giới-thiệu-dự-án)
+2. [Ý Tưởng Dự Án](#2-ý-tưởng-dự-án)
+3. [Quy Định, Nguyên Tắc & Quy Tắc](#3-quy-định-nguyên-tắc--quy-tắc)
+4. [Quy Trình Hoạt Động](#4-quy-trình-hoạt-động)
+5. [Kiến Trúc Kỹ Thuật](#5-kiến-trúc-kỹ-thuật)
+6. [Hướng Dẫn Sử Dụng](#6-hướng-dẫn-sử-dụng)
+
+---
+
+## 1. Giới Thiệu Dự Án
+
+### 1.1. Bối Cảnh & Vấn Đề
+Trong hoạt động kinh doanh hàng ngày, việc quản lý và ghi chép hóa đơn mua hàng thủ công — từ các sàn thương mại điện tử, siêu thị, nhà cung cấp thực phẩm đến các phiếu thu viết tay tại chợ — tiêu tốn rất nhiều thời gian, dễ sai sót và khó truy xuất khi cần đối soát.
+
+Các vấn đề cốt lõi:
+- **Tốn thời gian**: Nhập liệu thủ công từng mặt hàng, từng hóa đơn vào bảng tính.
+- **Sai sót dữ liệu**: Nhầm lẫn số lượng, đơn giá, ghi thiếu mặt hàng, hoặc nhập trùng lặp.
+- **Khó truy xuất**: Không có hệ thống phân loại theo nhóm doanh nghiệp, không có mã định danh thống nhất.
+- **Rủi ro nhân đôi chi phí**: Không có cơ chế tự động phát hiện hóa đơn đã nhập trước đó.
+
+### 1.2. Giải Pháp
+**Procurement Receipt OCR** là hệ thống **tự động hóa toàn bộ quy trình** từ việc thu thập ảnh chụp hóa đơn trên Google Drive, bóc tách thông tin bằng trí tuệ nhân tạo (AI), phân loại theo nhóm đối tượng doanh nghiệp, kiểm tra trùng lặp và chính tả, cho đến xuất dữ liệu chuẩn hóa vào Google Sheets — tất cả chỉ với **một cú nhấn chuột**.
+
+### 1.3. Đối Tượng Sử Dụng
+- Nhân viên quản lý mua hàng, kế toán thu mua.
+- Chủ doanh nghiệp nhỏ, quản lý cửa hàng F&B.
+- Bất kỳ ai cần số hóa và quản lý hóa đơn mua hàng một cách tự động.
+
+---
+
+## 2. Ý Tưởng Dự Án
+
+### 2.1. Tầm Nhìn
+Xây dựng một hệ thống **"Zero-Touch Procurement"** (Thu Mua Không Chạm) — nơi người dùng chỉ cần **chụp ảnh hoặc tải hóa đơn lên Google Drive**, mọi thao tác còn lại đều do hệ thống xử lý tự động:
+
+```mermaid
+graph LR
+    A["📸 Chụp ảnh hóa đơn"] --> B["☁️ Tải lên Google Drive"]
+    B --> C["🤖 AI đọc & phân loại"]
+    C --> D["🛡️ Kiểm tra trùng lặp"]
+    D --> E["📊 Xuất vào Google Sheet"]
+```
+
+### 2.2. Nguyên Tắc Thiết Kế
+
+1. **Hoạt Động Hybrid (Online + Offline)**:
+   - Khi có Internet: Sử dụng **Google Gemini** (Cloud AI) để bóc tách thông tin với tốc độ cao và độ chính xác tối đa.
+   - Khi không có Internet: Tự động chuyển sang **Ollama (qwen2.5-vl:7b)** chạy cục bộ trên máy tính, đảm bảo hệ thống không bao giờ bị gián đoạn.
+
+2. **Phân Loại Thông Minh**: Tự động nhận diện và phân loại hóa đơn vào 4 nhóm đối tượng doanh nghiệp, mỗi nhóm có quy tắc trình bày riêng.
+
+3. **Bảo Vệ Dữ Liệu**: Cơ chế chống trùng lặp 2 tầng đảm bảo không bao giờ ghi lặp hóa đơn hoặc nhân đôi chi phí.
+
+4. **Tiếng Việt Chuẩn Xác**: Kiểm tra chính tả tiếng Việt tự động, phát hiện lỗi gõ Telex, lỗi font OCR.
+
+### 2.3. Điểm Khác Biệt So Với Các Giải Pháp Truyền Thống
+
+| Tiêu Chí | Phương Pháp Truyền Thống | Procurement Receipt OCR |
+| :--- | :--- | :--- |
+| Nhập liệu | Thủ công, gõ phím từng trường | Hoàn toàn tự động bằng AI |
+| Phân loại hóa đơn | Tự phân loại bằng mắt | AI tự phân loại 4 nhóm đối tượng |
+| Kiểm tra trùng lặp | Dò bằng mắt trên bảng tính | Hệ thống đối soát 2 tầng tự động |
+| Tốc độ xử lý | 3–5 phút / hóa đơn | 5–10 giây / hóa đơn |
+| Yêu cầu mạng | Không áp dụng | Hybrid: hoạt động cả Online & Offline |
+
+---
+
+## 3. Quy Định, Nguyên Tắc & Quy Tắc
+
+### 3.1. Cấu Trúc & Nguyên Tắc Cấp Mã Số Giao Dịch (Mã Đối Tượng)
+
+Mỗi hóa đơn khi nhập vào Google Sheet được cấp phát tự động một **mã định danh duy nhất tăng dần liên tục** theo công thức:
+
+> **`DTnXXXX`**
+
+Trong đó:
+- **`DT`**: Tiền tố cố định (viết tắt của "Đối Tượng").
+- **`n`**: Số nguyên dương đại diện cho nhóm đối tượng ($n \in \{1, 2, 3, 4\}$).
+- **`XXXX`**: Số thứ tự 4 chữ số, bắt đầu từ `0001` và tăng dần vô hạn theo từng hóa đơn phát sinh.
+
+---
+
+#### 📌 Nguyên Tắc Cấp Mã Theo Từng Nhóm Đối Tượng:
+
+1. **Đối Với Đối Tượng 1 (Sàn TMĐT & Dịch Vụ Vận Chuyển):**
+   - Giữ nguyên tắc mã đối tượng độc bản theo từng đơn hàng: Mỗi đơn hàng/phiếu gửi hàng là 1 giao dịch trọn gói, được cấp một mã đối tượng `DT1XXXX` duy nhất và nhập trên **1 dòng** tổng hợp.
+   - Ví dụ: Đơn hàng Shopee thứ 1 được cấp mã `DT10001`, đơn hàng thứ 2 được cấp mã `DT10002`.
+
+2. **Đối Với Các Đối Tượng Khác (Đối Tượng 2, Đối Tượng 3, Đối Tượng 4):**
+   - **Quy tắc đồng nhất mã trong cùng hóa đơn:** Các mặt hàng trong cùng một hóa đơn ở các đối tượng này, thì sẽ ghi **cùng mã đối tượng**.
+   - **Ví dụ cụ thể:** Mặt hàng A và mặt hàng B cùng nằm trong 1 hóa đơn siêu thị WinMart (Đối tượng 2, hóa đơn thứ 1), thì khi nhập liệu:
+     + Dòng mặt hàng A ghi mã đối tượng: **`DT20001`**
+     + Dòng mặt hàng B ghi mã đối tượng: **`DT20001`**
+     + Khi chuyển sang hóa đơn siêu thị tiếp theo (hóa đơn thứ 2), các mặt hàng trong hóa đơn mới sẽ cùng tăng lên mã: **`DT20002`**.
+
+> [!NOTE]
+> **Bảng minh họa cấp mã đối tượng:**
+> | Hóa Đơn Phát Sinh | Nhóm Đối Tượng | Mặt Hàng Trong Hóa Đơn | Dòng Trên Sheet | Mã Đối Tượng Được Cấp |
+> | :---: | :--- | :--- | :---: | :---: |
+> | Hóa đơn Shopee #1 | **DT1** (Sàn TMĐT) | Dâu sấy, Nho khô, Chà là | Dòng 1 (Tổng hợp) | **`DT10001`** |
+> | Hóa đơn WinMart #1 | **DT2** (Siêu thị) | Sữa chua Vinamilk | Dòng 1 | **`DT20001`** |
+> | *(Cùng hóa đơn WinMart #1)* | **DT2** (Siêu thị) | Bánh mì sandwich | Dòng 2 | **`DT20001`** *(Cùng mã)* |
+> | Hóa đơn WinMart #2 | **DT2** (Siêu thị) | Nước suối Aquafina | Dòng 3 | **`DT20002`** *(Tăng mã mới)* |
+> | Hóa đơn Nông sản #1 | **DT3** (Thực phẩm) | Thịt bò phi lê | Dòng 1 | **`DT30001`** |
+> | *(Cùng hóa đơn Nông sản #1)* | **DT3** (Thực phẩm) | Rau cải thìa | Dòng 2 | **`DT30001`** *(Cùng mã)* |
+> | Hóa đơn Viết tay #1 | **DT4** (Chợ/Viết tay) | Hành lá, Ớt hiểm | Dòng 1 | **`DT40001`** |
+
+**Nguyên tắc liên tục**: Hệ thống tự động tra cứu dòng cuối cùng của mỗi nhóm trên Google Sheet để xác định số thứ tự hóa đơn lớn nhất hiện có, rồi tăng thêm 1 cho hóa đơn mới. Mã số không bị reset khi khởi động lại hệ thống.
+
+---
+
+### 3.2. Tiêu Chuẩn Phân Loại 4 Nhóm Đối Tượng Doanh Nghiệp
+
+```mermaid
+graph TD
+    A["Ảnh Hóa Đơn / Phiếu Gửi Hàng"] --> B{"Phân Loại Tự Động Bởi AI"}
+    B -->|Shopee, Lazada, SPX, GHN, GHTK...| C["Nhóm 1 – DT1: Sàn TMĐT & Vận chuyển"]
+    B -->|Co.opmart, WinMart, Big C, Circle K...| D["Nhóm 2 – DT2: Siêu thị & Bán lẻ"]
+    B -->|Công ty thực phẩm, nông sản, F&B...| E["Nhóm 3 – DT3: Cung ứng thực phẩm"]
+    B -->|Viết tay, không rõ pháp nhân...| F["Nhóm 4 – DT4: Giấy viết tay"]
+```
+
+| Nhóm | Tên Đối Tượng | Dấu Hiệu Nhận Biết |
+| :---: | :--- | :--- |
+| **DT1** | Sàn TMĐT & Dịch vụ vận chuyển | Shopee, SPX Express, Lazada, TikTok Shop, Tiki, Grab, GHTK, GHN, Viettel Post, J&T Express, AhaMove... |
+| **DT2** | Siêu thị & Cửa hàng tiện lợi | Co.opmart, WinMart, Big C, Go!, Lotte Mart, Aeon, 7-Eleven, Circle K, GS25, Bách Hóa Xanh, Guardian, Con Cưng... |
+| **DT3** | Doanh nghiệp cung ứng thực phẩm | Nhà cung cấp thịt, cá, rau, củ, quả, nông sản tươi sống, nguyên liệu F&B... |
+| **DT4** | Giấy viết tay & Không rõ danh tính | Biên lai chợ viết tay, phiếu thu không có mã số thuế hoặc không xác định rõ người mua/bán... |
+
+---
+
+### 3.3. Cấu Trúc 10 Cột Chuẩn Trên Google Sheet
+
+| Cột | Ký Hiệu | Tên Trường | Mô Tả |
+| :---: | :---: | :--- | :--- |
+| **A** | Mục 1 | **Mã đối tượng** | Mã tự động tăng `DTnXXXX` |
+| **B** | Mục 2 | **Ngày, tháng, năm** | Thời gian phát sinh giao dịch |
+| **C** | Mục 2.1 | **Tên công ty** | Tên cửa hàng / Sàn TMĐT / Dịch vụ |
+| **D** | Mục 3 | **Địa chỉ** | Địa chỉ người bán / nơi gửi hàng |
+| **E** | Mục 4 | **Mã hóa đơn, chứng từ** | Số hóa đơn / Mã đơn hàng / Mã chứng từ |
+| **F** | Mục 5 | **Tên hàng hóa, dịch vụ** | Tên chi tiết từng mặt hàng |
+| **G** | Mục 6 | **Số lượng** | Số lượng mặt hàng hoặc tổng SL |
+| **H** | Mục 7 | **Đơn giá / Thành tiền** | Đơn giá hoặc tổng giá trị thanh toán |
+| **I** | Mục 7.1 | **Người mua/nhận hàng** | Tên người mua hàng / người nhận hàng |
+| **J** | Mục 8 | **Ghi chú** | Thông tin bổ sung, cảnh báo |
+
+---
+
+### 3.4. Quy Tắc Trình Bày Riêng Cho Từng Nhóm Đối Tượng
+
+#### 🟢 Đối Tượng 1 (DT1) — Sàn TMĐT & Dịch Vụ Vận Chuyển
+
+> [!IMPORTANT]
+> Đối tượng 1 có quy tắc trình bày **khác biệt so với cấu trúc chung**:
+
+| Cột | Nội Dung Điền | Ghi Chú Đặc Biệt |
+| :---: | :--- | :--- |
+| **A** | Mã `DT1XXXX` | Mã tự động tăng dần |
+| **B** | Ngày đặt hàng | Lấy từ thông tin đơn hàng |
+| **C** | Tên sàn / Dịch vụ vận chuyển / Tên Shop | Ví dụ: "SPX Express", "Tiệm Ăn Vặt Hồng Hà (Shopee)" |
+| **D** | Địa chỉ người gửi / nhận | |
+| **E** | **Mã đơn hàng** | Ví dụ: `2601287Q55X4RX` |
+| **F** | **Để trống `""`** | ⚠️ Không nhập tên hàng vào cột này |
+| **G** | **Tổng số lượng** tất cả sản phẩm | Cộng dồn SL tất cả mặt hàng trong đơn |
+| **H** | **Tổng thành tiền** | Tổng tiền COD / Tổng giá trị đơn hàng |
+| **I** | **Người nhận hàng** | Tên người nhận trên phiếu giao nhận |
+| **J** | **Mã vận đơn + Danh sách mặt hàng** | Ghi chú bổ sung mã vận đơn cùng tên từng mặt hàng (kèm SL) |
+
+**Ví dụ thực tế Cột J (Ghi chú):**
+```
+Mã vận đơn: SPXVN064620286071
+Mặt hàng:
+- [HỎA TỐC] Dâu Sấy Thăng Hoa 250G (SL: 2)
+- [TẶNG 5 TRÁI] Nho xanh khô (SL: 1)
+- [Tặng 1 trái] Chà là sấy dẻo (SL: 1)
+```
+
+#### 🔵 Đối Tượng 2 (DT2) — Siêu Thị & Cửa Hàng Bán Lẻ
+- Điền đầy đủ 10 cột, mỗi mặt hàng = 1 dòng trên Google Sheet.
+- Cột I: Điền tên người mua hàng (nếu hóa đơn có ghi nhận).
+- **Cảnh báo VAT**: Nếu hóa đơn có thuế GTGT $> 0$, hệ thống tự động gắn cờ cảnh báo vàng để người dùng kiểm tra thủ công.
+
+#### 🟡 Đối Tượng 3 (DT3) — Doanh Nghiệp Cung Ứng Thực Phẩm
+- Điền đầy đủ 10 cột.
+- Cột I: Điền tên người mua/nhận hàng.
+- **Quy tắc lọc bắt buộc**: Tự động **loại bỏ hoàn toàn** các mặt hàng có chứa ký hiệu **`"(loại bỏ)"`** trong tên sản phẩm.
+- Gắn cờ cảnh báo VAT tương tự Đối tượng 2.
+
+#### 🟣 Đối Tượng 4 (DT4) — Giấy Viết Tay & Không Rõ Danh Tính
+- Nguyên tắc **"Điền nếu có"**: Điền các trường thông tin nhận diện được (bao gồm người mua/nhận nếu có), bỏ trống nếu không có.
+- Ghi chú đánh dấu "Hóa đơn viết tay".
+
+---
+
+### 3.5. Cơ Chế Chống Trùng Lặp (Duplicate Guard)
+
+Hệ thống áp dụng mô hình **Bảo vệ 2 Tầng (Two-Tier Guard)**:
+
+```mermaid
+flowchart TD
+    A["Hóa đơn mới được bóc tách"] --> B["Trích xuất Mã Đơn / Mã Vận Đơn / Số HĐ"]
+    B --> C{"Tầng 1: So khớp với toàn bộ dữ liệu lịch sử trên Google Sheet"}
+    C -- "ĐÃ TỒN TẠI" --> E["🛑 Cảnh Báo Đỏ: TRÙNG LẶP\nTự động bỏ chọn, không cho nhập"]
+    C -- "CHƯA CÓ" --> D{"Tầng 2: So khớp với các ảnh khác trong cùng đợt quét"}
+    D -- "TRÙNG" --> E
+    D -- "HỢP LỆ" --> F["✅ Đánh Dấu Hợp Lệ\nSẵn sàng nhập vào Google Sheet"]
+```
+
+**Các khóa định danh được đối soát:**
+- Mã đơn hàng (Order ID)
+- Mã vận đơn (Tracking Number)
+- Số hóa đơn (Invoice Number)
+- Mã chứng từ / Phiếu thu
+
+**Hành động khi phát hiện trùng:**
+1. Hiển thị cảnh báo đỏ trên bảng kết quả.
+2. Tự động bỏ tích chọn (Uncheck) dòng bị trùng.
+3. Người dùng có quyền xem xét và quyết định cuối cùng.
+
+---
+
+## 4. Quy Trình Hoạt Động
+
+### 4.1. Quy Trình Tổng Thể (6 Bước)
+
+```mermaid
+flowchart TD
+    S1["📸 Bước 1\nTự động lấy ảnh từ\nthư mục Google Drive"]
+    S2["🤖 Bước 2\nTrích xuất cấu trúc chuẩn hóa\nbằng LLM Receipt OCR"]
+    S3["🏷️ Bước 3\nXác định đối tượng doanh nghiệp\ndựa vào nội dung JSON"]
+    S4["📋 Bước 4\nLọc thông tin theo đối tượng\nvà quy tắc tương ứng"]
+    S5["📊 Bước 5\nNhập thông tin\nvào Google Sheet"]
+    S6["🛡️ Bước 6\nXác định tính trùng lặp\nvà gắn cờ cảnh báo"]
+
+    S1 --> S2 --> S3 --> S4 --> S6 --> S5
+```
+
+### 4.2. Mô Tả Chi Tiết Từng Bước
+
+#### Bước 1: Thu Thập Ảnh Tự Động Từ Google Drive
+- Hệ thống kết nối với thư mục Google Drive đã cấu hình thông qua **Google Drive API**.
+- Tự động liệt kê tất cả các tệp ảnh (JPEG, PNG) và PDF trong thư mục.
+- Tải nội dung ảnh về bộ nhớ tạm để xử lý.
+
+#### Bước 2: Bóc Tách Thông Tin Bằng AI (LLM Receipt OCR)
+- Gửi ảnh hóa đơn đến mô hình AI (Google Gemini hoặc Ollama).
+- AI trả về dữ liệu JSON chuẩn hóa gồm: tên cửa hàng, địa chỉ, mã đơn hàng, mã vận đơn, danh sách mặt hàng, tổng tiền, phương thức thanh toán...
+
+#### Bước 3: Phân Loại Đối Tượng Doanh Nghiệp
+- Dựa trên nội dung JSON vừa trích xuất, hệ thống **tự động nhận diện** hóa đơn thuộc nhóm DT1, DT2, DT3 hay DT4.
+- Cấp mã `DTnXXXX` tương ứng.
+
+#### Bước 4: Lọc & Định Dạng Theo Quy Tắc Riêng
+- Áp dụng quy tắc trình bày riêng biệt của từng nhóm đối tượng (xem Phần 3.4).
+- Đối với DT3: Tự động loại bỏ mặt hàng có ký hiệu `"(loại bỏ)"`.
+
+#### Bước 5: Kiểm Tra Trùng Lặp & Cảnh Báo
+- Đối soát mã đơn hàng / mã vận đơn / số hóa đơn với lịch sử trên Google Sheet.
+- Đối soát nội bộ giữa các ảnh trong cùng đợt quét.
+- Kiểm tra thuế VAT và cảnh báo nếu phát hiện.
+- Kiểm tra chính tả tiếng Việt.
+
+#### Bước 6: Nhập Vào Google Sheet
+- Các hóa đơn hợp lệ (không trùng lặp) được hiển thị trên bảng xem trước.
+- Người dùng xem xét, tích chọn và nhấn **"Phê Duyệt & Nhập Vào Google Sheet"**.
+- Dữ liệu được ghi tự động vào bảng tính qua **Google Sheets API**.
+
+---
+
+## 5. Kiến Trúc Kỹ Thuật
+
+### 5.1. Sơ Đồ Kiến Trúc Tổng Thể
+
+```mermaid
+graph TB
+    subgraph "Người Dùng"
+        U["🖥️ Trình duyệt Web\nhttp://localhost:8000"]
+    end
+
+    subgraph "Docker Container"
+        API["⚡ FastAPI Server\n(server.py)"]
+        OCR["🤖 OCR Engine\n(ocr_engine.py)"]
+        BR["📋 Business Rules\n(business_rules.py)"]
+        DC["🛡️ Duplicate Checker\n(duplicate_checker.py)"]
+        SC["✏️ Spell Checker\n(spell_checker.py)"]
+        GS["☁️ Google Service\n(google_service.py)"]
+    end
+
+    subgraph "Dịch Vụ Bên Ngoài"
+        GD["📁 Google Drive API"]
+        GSH["📊 Google Sheets API"]
+        GM["🧠 Google Gemini API"]
+    end
+
+    subgraph "Máy Cục Bộ (Offline)"
+        OL["💻 Ollama Server\nqwen2.5-vl:7b"]
+    end
+
+    U --> API
+    API --> OCR
+    API --> BR
+    API --> DC
+    API --> SC
+    API --> GS
+    GS --> GD
+    GS --> GSH
+    OCR --> GM
+    OCR --> OL
+```
+
+### 5.2. Công Nghệ Sử Dụng
+
+| Thành Phần | Công Nghệ | Phiên Bản / Ghi Chú |
+| :--- | :--- | :--- |
+| **Ngôn ngữ lập trình** | Python | 3.12 |
+| **Web Framework** | FastAPI + Uvicorn | Async, hiệu suất cao |
+| **Container** | Docker + Docker Compose | Đóng gói toàn bộ môi trường |
+| **AI Online** | Google Gemini API | `gemini-2.5-flash-lite` (tự động fallback các dòng flash-lite) |
+| **AI Offline** | Ollama | `qwen2.5-vl:7b` (chạy cục bộ trên GPU RTX 2050) |
+| **OCR Dự Phòng** | Tesseract OCR | Hỗ trợ tiếng Việt (`tesseract-ocr-vie`) |
+| **Google APIs** | Drive API v3 + Sheets API v4 | Xác thực bằng Service Account |
+| **Xử lý ảnh** | Pillow (PIL) | Đọc, chuyển đổi format ảnh |
+| **HTTP Client** | httpx | Giao tiếp với Gemini API (có retry) |
+
+### 5.3. Cấu Trúc Thư Mục Dự Án
+
+```
+Scan_Hoa_Don/
+├── server.py                  # FastAPI Server chính + Giao diện Dashboard HTML/JS
+├── Dockerfile                 # Docker image: Python 3.12 + Tesseract OCR
+├── docker-compose.yml         # Docker Compose: cấu hình container
+├── requirements.txt           # Danh sách thư viện Python
+├── .env                       # Biến môi trường (API keys, Google IDs)
+├── service_account.json       # Google Cloud Service Account credentials
+├── test_suite.py              # Bộ kiểm thử tự động (5 test cases)
+├── README.md                  # Tài liệu hệ thống
+├── services/
+│   ├── ocr_engine.py          # Engine OCR Hybrid (Gemini + Ollama + Tesseract)
+│   ├── business_rules.py      # Phân loại 4 nhóm DT & Định dạng 9 cột
+│   ├── google_service.py      # Google Drive & Sheets API Client
+│   ├── duplicate_checker.py   # Cơ chế chống trùng lặp 2 tầng
+│   └── spell_checker.py       # Kiểm tra chính tả tiếng Việt
+├── samples/                   # Ảnh hóa đơn mẫu để test
+└── config/                    # Tệp cấu hình bổ sung
+```
+
+### 5.4. Cấu Hình Môi Trường (File `.env`)
+
+```ini
+# Chế độ AI: auto | cloud | ollama
+AI_ENGINE_MODE=auto
+
+# Google Gemini API Key
+OPENAI_API_KEY=<Gemini API Key>
+OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+OPENAI_MODEL=gemini-2.5-flash-lite
+
+# Google Cloud Service Account
+GOOGLE_SERVICE_ACCOUNT_FILE=service_account.json
+
+# Google Drive: ID thư mục chứa ảnh hóa đơn
+GOOGLE_DRIVE_FOLDER_ID=<Google Drive Folder ID>
+
+# Google Sheets: ID bảng tính và tên tab
+GOOGLE_SHEET_ID=<Google Sheet ID>
+GOOGLE_SHEET_NAME=Trang tính1
+```
+
+### 5.5. Cơ Chế Fallback Đa Tầng Của OCR Engine
+
+```mermaid
+flowchart LR
+    A["Ảnh hóa đơn"] --> B{"Chế độ AI_ENGINE_MODE"}
+    B -->|auto| C["Thử Google Gemini"]
+    B -->|cloud| C
+    B -->|ollama| F["Ollama qwen2.5-vl:7b"]
+    C -->|"Thành công"| D["✅ Trả kết quả JSON"]
+    C -->|"Thất bại (503/429)"| E["Retry + Thử model dự phòng"]
+    E -->|"Vẫn thất bại"| F
+    F -->|"Thành công"| D
+    F -->|"Thất bại"| G["❌ Báo lỗi cho người dùng"]
+```
+
+**Danh sách model dự phòng (theo thứ tự ưu tiên):**
+1. `gemini-2.5-flash-lite`
+2. `gemini-3.1-flash-lite`
+3. `gemini-3.5-flash-lite`
+
+Mỗi model được thử tối đa 2 lần với khoảng cách 2 giây giữa các lần retry.
+
+---
+
+## 6. Hướng Dẫn Sử Dụng
+
+### 6.1. Yêu Cầu Hệ Thống
+
+| Thành Phần | Yêu Cầu Tối Thiểu |
+| :--- | :--- |
+| **Hệ điều hành** | Windows 10/11 (64-bit) |
+| **RAM** | 8 GB (Khuyến nghị 16 GB nếu dùng Ollama) |
+| **GPU** | NVIDIA GTX 1060 trở lên (Khuyến nghị RTX 2050+, cần cho Ollama) |
+| **Docker** | Docker Desktop đã cài đặt và đang chạy |
+| **Internet** | Cần có để dùng Google Gemini; Không cần nếu dùng Ollama |
+
+### 6.2. Cài Đặt & Khởi Chạy
+
+#### Bước 1: Cấu hình API Key
+Mở file [.env](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/.env) và điền Gemini API Key:
+```ini
+OPENAI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxx
+```
+> Lấy API Key miễn phí tại: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+
+#### Bước 2: Cấu hình Google Service Account
+1. Truy cập [Google Cloud Console](https://console.cloud.google.com/).
+2. Tạo **Service Account** và tải file JSON credentials.
+3. Đặt file JSON vào thư mục dự án với tên `service_account.json`.
+4. Bật **Google Drive API** và **Google Sheets API** trong dự án Google Cloud.
+
+#### Bước 3: Cấu hình Google Drive & Google Sheets
+1. **Google Drive**: Chia sẻ thư mục chứa ảnh hóa đơn với email Service Account (quyền **Viewer**). Lấy Folder ID từ URL:
+   ```
+   https://drive.google.com/drive/folders/<FOLDER_ID>
+   ```
+2. **Google Sheets**: Tạo bảng tính, chia sẻ với email Service Account (quyền **Editor**). Lấy Sheet ID từ URL:
+   ```
+   https://docs.google.com/spreadsheets/d/<SHEET_ID>/edit
+   ```
+3. Điền vào file `.env`:
+   ```ini
+   GOOGLE_DRIVE_FOLDER_ID=<Folder ID>
+   GOOGLE_SHEET_ID=<Sheet ID>
+   GOOGLE_SHEET_NAME=Trang tính1
+   ```
+
+#### Bước 4: Khởi chạy hệ thống
+```powershell
+cd Scan_Hoa_Don
+docker compose up -d
+```
+Truy cập Dashboard tại: **[http://localhost:8000](http://localhost:8000)**
+
+---
+
+### 6.3. Sử Dụng Dashboard
+
+Dashboard gồm **3 tab chính**:
+
+#### Tab 1: ⚡ Tự Động Google Drive
+Đây là tab chính cho quy trình tự động hóa:
+1. Nhấn **"🚀 Quét Thư Mục Drive & Phân Tích"** — Hệ thống tự động:
+   - Tải ảnh từ Google Drive.
+   - Gửi qua AI để bóc tách thông tin.
+   - Phân loại nhóm đối tượng.
+   - Kiểm tra trùng lặp, VAT, chính tả.
+2. Xem bảng kết quả xem trước:
+   - ✅ Hợp lệ (tích chọn sẵn).
+   - 🛑 Trùng lặp (bỏ tích, hiển thị cảnh báo đỏ).
+   - ⚠️ Cảnh báo VAT / Chính tả (hiển thị cảnh báo vàng).
+3. Nhấn **"📊 Phê Duyệt & Nhập Vào Google Sheet"** để ghi dữ liệu đã duyệt.
+
+#### Tab 2: 📤 Tải Lên Đơn Lẻ
+- Kéo thả hoặc chọn ảnh hóa đơn đơn lẻ để phân tích nhanh.
+- Xem kết quả JSON chi tiết ngay trên giao diện.
+
+#### Tab 3: ⚙️ Cấu Hình AI & Engine
+- Kiểm tra trạng thái kết nối: Cloud AI, Ollama, Google Drive, Google Sheets, Tesseract.
+- Làm mới trạng thái hệ thống.
+
+---
+
+### 6.4. Cài Đặt Ollama (Tùy Chọn — Cho Chế Độ Offline)
+
+Nếu muốn sử dụng chế độ Offline khi không có Internet:
+
+```powershell
+# Cài đặt Ollama
+winget install Ollama.Ollama
+
+# Tải model qwen2.5-vl:7b (lần đầu tiên)
+ollama pull qwen2.5-vl:7b
+
+# Khởi chạy Ollama server
+ollama serve
+```
+
+> [!TIP]
+> Khi Ollama đang chạy và chế độ AI là `auto`, hệ thống sẽ tự động chuyển sang Ollama nếu Google Gemini không khả dụng (mất mạng, quá tải, hết quota...).
+
+---
+
+### 6.5. Kiểm Thử Hệ Thống
+
+Chạy bộ kiểm thử tự động (5 test cases) để xác nhận mọi thành phần hoạt động đúng:
+
+```powershell
+docker exec procurement-receipt-ocr python test_suite.py
+```
+
+Kết quả mong đợi:
+```
+[*] Testing Category 1 (E-commerce / Delivery)...     -> Passed!
+[*] Testing Category 3 (Food Supply with filter)...    -> Passed!
+[*] Testing VAT Alert detection...                     -> Passed!
+[*] Testing Duplicate Checker...                       -> Passed!
+[*] Testing Vietnamese Spell Checker...                -> Passed!
+
+[🎉] ALL UNIT TESTS PASSED SUCCESSFULLY!
+```
+
+---
+
+> [!TIP]
+> Bạn có thể comment trực tiếp trên từng phần của tài liệu này để đề xuất chỉnh sửa, bổ sung hoặc điều chỉnh nội dung. Tôi sẽ cập nhật ngay theo phản hồi của bạn.

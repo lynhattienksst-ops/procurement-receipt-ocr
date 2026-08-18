@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+Pillow
+python-dotenv
+pytesseract
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+gspread
+openai
+pydantic
+pytest
+httpx

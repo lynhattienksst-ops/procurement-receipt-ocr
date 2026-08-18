@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Hóa Đơn OCR</title>
+    
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css">
+    
+    <!-- Third Party Plugin(OverlayScrollbars) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/styles/overlayscrollbars.min.css">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css">
+    
+    <!-- AdminLTE CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css">
+    
+    <!-- Custom Styles -->
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .status-dot {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-on { background-color: #28a745; box-shadow: 0 0 8px #28a745; }
+        .status-off { background-color: #dc3545; box-shadow: 0 0 8px #dc3545; }
+    </style>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+    <div class="app-wrapper">
+        <!-- Main Header -->
+        <nav class="app-header navbar navbar-expand bg-body">
+            <div class="container-fluid">
+                <ul class="navbar-nav">
+                    <li class="nav-item"> <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button"> <i class="bi bi-list"></i> </a> </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-lte-toggle="fullscreen">
+                            <i data-lte-icon="maximize" class="bi bi-arrows-fullscreen"></i>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Main Sidebar -->
+        <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+            <div class="sidebar-brand">
+                <a href="index.html" class="brand-link">
+                    <span class="brand-text fw-light">OCR Hóa Đơn</span>
+                </a>
+            </div>
+            <div class="sidebar-wrapper">
+                <nav class="mt-2">
+                    <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
+                        <li class="nav-item">
+                            <a href="index.html" class="nav-link active">
+                                <i class="nav-icon bi bi-speedometer2"></i>
+                                <p>Bảng Điều Khiển</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="verify.html" class="nav-link">
+                                <i class="nav-icon bi bi-file-check"></i>
+                                <p>Đối Chiếu Hóa Đơn</p>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <div class="app-content-header">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <h3 class="mb-0">Bảng Điều Khiển</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="app-content">
+                <div class="container-fluid">
+                    <div class="row">
+                        <!-- Model Selection Card -->
+                        <div class="col-lg-6">
+                            <div class="card glass-card mb-4">
+                                <div class="card-header border-0">
+                                    <h3 class="card-title">Thiết lập Model AI</h3>
+                                </div>
+                                <div class="card-body">
+                                    <form id="model-form">
+                                        <div class="mb-3">
+                                            <label for="aiModel" class="form-label">Chọn Model Trích Xuất</label>
+                                            <select class="form-select" id="aiModel" name="model">
+                                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                                                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+                                                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
+                                                <option value="qwen2.5-vl:7b">Ollama: Qwen 2.5 VL 7B (Local)</option>
+                                            </select>
+                                        </div>
+                                        <button type="button" class="btn btn-primary" onclick="saveModel()">Lưu Thiết Lập</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Auto-Scan Control Card -->
+                        <div class="col-lg-6">
+                            <div class="card glass-card mb-4">
+                                <div class="card-header border-0">
+                                    <h3 class="card-title">Điều Khiển Tự Động Quét</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-4">
+                                        <div>
+                                            <h5 class="mb-1">Trạng thái hiện tại:</h5>
+                                            <span id="scan-status-text" class="text-muted">Đang tải...</span>
+                                            <span id="scan-status-dot" class="status-dot ms-2"></span>
+                                        </div>
+                                        <div class="form-check form-switch fs-4">
+                                            <input class="form-check-input" type="checkbox" role="switch" id="autoScanToggle" onchange="toggleAutoScan()">
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <div class="mt-4">
+                                        <h5 class="mb-3">Quét Tức Thì</h5>
+                                        <p class="text-muted">Bắt buộc hệ thống quét thư mục Google Drive ngay lập tức, bỏ qua chu kỳ chờ.</p>
+                                        <button type="button" class="btn btn-success" id="triggerBtn" onclick="triggerScan()">
+                                            <i class="bi bi-play-fill me-1"></i> Quét Ngay
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger ms-2" id="stopBtn" onclick="stopScan()">
+                                            <i class="bi bi-stop-fill me-1"></i> Dừng Quét
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Floating Toast Notification Container (Góc dưới bên Trái màn hình) -->
+    <div class="toast-container position-fixed bottom-0 start-0 p-3" style="z-index: 1200;">
+        <div id="liveToast" class="toast align-items-center text-bg-success border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body fs-6" id="toastMessage">
+                    <!-- Dynamic Message -->
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/browser/overlayscrollbars.browser.es6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
+    <script src="app.js?v=20260817b"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchStatus();
+            // Tự động cập nhật trạng thái quét mỗi 3 giây
+            setInterval(fetchStatus, 3000);
+        });
+    </script>
+</body>
+</html>

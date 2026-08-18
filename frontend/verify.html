@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đối Chiếu Hóa Đơn | OCR Hóa Đơn</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/styles/overlayscrollbars.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css">
+    
+    <style>
+        .split-container {
+            display: flex;
+            height: calc(100vh - 210px);
+            gap: 15px;
+        }
+        .split-left {
+            flex: 1;
+            background: #1e1e1e;
+            border-radius: 8px;
+            overflow: auto;
+            border: 1px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .split-right {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .img-preview {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .dropzone-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #aaa;
+            border: 2px dashed #666;
+            border-radius: 8px;
+            cursor: pointer;
+            background: rgba(30,30,30,0.85);
+        }
+    </style>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+    <div class="app-wrapper">
+        <nav class="app-header navbar navbar-expand bg-body">
+            <div class="container-fluid">
+                <ul class="navbar-nav">
+                    <li class="nav-item"> <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button"> <i class="bi bi-list"></i> </a> </li>
+                </ul>
+            </div>
+        </nav>
+
+        <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+            <div class="sidebar-brand">
+                <a href="index.html" class="brand-link">
+                    <span class="brand-text fw-light">OCR Hóa Đơn</span>
+                </a>
+            </div>
+            <div class="sidebar-wrapper">
+                <nav class="mt-2">
+                    <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
+                        <li class="nav-item">
+                            <a href="index.html" class="nav-link">
+                                <i class="nav-icon bi bi-speedometer2"></i>
+                                <p>Bảng Điều Khiển</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="verify.html" class="nav-link active">
+                                <i class="nav-icon bi bi-file-check"></i>
+                                <p>Đối Chiếu Hóa Đơn</p>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        <main class="app-main">
+            <div class="app-content-header pb-2">
+                <div class="container-fluid">
+                    <div class="row align-items-center mb-2">
+                        <div class="col-md-5">
+                            <h4 class="mb-0">Đối Chiếu Dữ Liệu Hóa Đơn</h4>
+                        </div>
+                        <!-- Mode Selector Tabs -->
+                        <div class="col-md-7">
+                            <ul class="nav nav-pills justify-content-md-end" id="verifyTabs" role="tablist">
+                                <li class="nav-item">
+                                    <button class="nav-link active btn-sm" id="history-tab" data-bs-toggle="pill" data-bs-target="#history-pane" type="button" onclick="switchMode('history')">
+                                        <i class="bi bi-clock-history me-1"></i> 1. Hóa Đơn Đã Lưu Trong Sheet
+                                    </button>
+                                </li>
+                                <li class="nav-item ms-2">
+                                    <button class="nav-link btn-sm" id="upload-tab" data-bs-toggle="pill" data-bs-target="#upload-pane" type="button" onclick="switchMode('upload')">
+                                        <i class="bi bi-cloud-arrow-up me-1"></i> 2. Tải Ảnh Mới Lên
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Mode 1: Historical ToolBar with Rich Filters -->
+                    <div id="historyToolbar" class="card card-body py-2 px-3 mb-2 bg-white border-0 shadow-sm">
+                        <div class="row align-items-center g-2">
+                            <!-- Bộ lọc Loại Hóa Đơn (DT1 - DT4) -->
+                            <div class="col-auto">
+                                <label class="small text-muted fw-bold d-block mb-1"><i class="bi bi-tags me-1"></i> Loại Hóa Đơn:</label>
+                                <select class="form-select form-select-sm" id="filterCategory" onchange="applyHistoricalFilters()">
+                                    <option value="ALL">📁 Tất Cả Nhóm (280)</option>
+                                    <option value="DT4" class="fw-bold text-danger">📝 DT4: Hóa Đơn Giấy / Viết Tay</option>
+                                    <option value="DT1" class="text-primary">🛒 DT1: Sàn TMĐT & Ship</option>
+                                    <option value="DT2" class="text-success">🏪 DT2: Siêu Thị & Bán Lẻ</option>
+                                    <option value="DT3" class="text-warning">🌾 DT3: Nông Sản Thực Phẩm</option>
+                                </select>
+                            </div>
+
+                            <!-- Bộ lọc Trạng Thái Duyệt -->
+                            <div class="col-auto">
+                                <label class="small text-muted fw-bold d-block mb-1"><i class="bi bi-funnel me-1"></i> Trạng Thái:</label>
+                                <select class="form-select form-select-sm" id="filterStatus" onchange="applyHistoricalFilters()">
+                                    <option value="ALL">🔍 Tất Cả Trạng Thái</option>
+                                    <option value="DUPLICATE_WARNING" class="text-danger fw-bold">⚠️ Nghi Vấn Trùng Lặp (Cần Quyết Định)</option>
+                                    <option value="UNCONFIRMED" class="text-warning">⏳ Chờ Kế Toán Duyệt</option>
+                                    <option value="CONFIRMED" class="text-success">✅ Đã Duyệt Đạt</option>
+                                    <option value="MATH_ERROR" class="text-danger">⚠️ Lệch Số Liệu / Cần Sửa</option>
+                                </select>
+                            </div>
+
+                            <!-- Dropdown Danh Sách Hóa Đơn -->
+                            <div class="col">
+                                <label class="small text-muted fw-bold d-block mb-1"><i class="bi bi-file-earmark-text me-1"></i> Danh Sách Hóa Đơn Theo Bộ Lọc:</label>
+                                <select class="form-select form-select-sm fw-semibold" id="savedReceiptSelect" onchange="onSelectSavedReceipt(this.value)">
+                                    <option value="">-- Đang tải danh sách hóa đơn từ Google Sheet... --</option>
+                                </select>
+                            </div>
+
+                            <div class="col-auto align-self-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadHistory" onclick="loadHistoricalRecords(true, true)">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Tải Lại Sheet
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mode 2: Upload ToolBar -->
+                    <div id="uploadToolbar" class="card card-body py-2 px-3 mb-2 bg-white border-0 shadow-sm d-none">
+                        <div class="row align-items-center g-2">
+                            <div class="col-auto fw-bold text-secondary small">
+                                <i class="bi bi-cpu me-1"></i> Model AI:
+                            </div>
+                            <div class="col-auto">
+                                <select class="form-select form-select-sm" id="verifyAiModel" style="max-width: 220px;">
+                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Khuyên dùng)</option>
+                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                                    <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
+                                    <option value="qwen2.5-vl:7b">Ollama: Qwen 2.5 VL 7B (Local)</option>
+                                </select>
+                            </div>
+                            <div class="col-auto">
+                                <input type="file" id="receiptFileInput" accept="image/*" style="display: none;" onchange="handleFileSelected(event)">
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('receiptFileInput').click()">
+                                    <i class="bi bi-folder2-open me-1"></i> Chọn Ảnh
+                                </button>
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-sm btn-primary" id="btnRunOcr" onclick="startOcrProcess()" disabled>
+                                    <i class="bi bi-stars me-1"></i> Trích Xuất AI
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="app-content">
+                <div class="container-fluid">
+                    <!-- Status / Badge Container: Tách thành 3 Ô riêng biệt -->
+                    <div class="row g-2 mb-2" id="statusBoxesRow">
+                        <!-- Ô 1: Nhóm Đối Tượng & Nhận Diện -->
+                        <div class="col-md-4">
+                            <div id="boxCategoryTag" class="alert alert-secondary py-2 px-3 mb-0 d-flex align-items-center gap-2">
+                                <i id="boxCategoryIcon" class="bi bi-tag-fill fs-5 text-primary"></i>
+                                <div class="overflow-hidden">
+                                    <strong class="d-block small text-uppercase">1. Phân Loại Đối Tượng:</strong>
+                                    <span id="boxCategoryText" class="small fw-bold text-truncate d-block">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Ô 2: Cảnh Báo Trùng Lặp & Kiểm Tra Toán Học -->
+                        <div class="col-md-4">
+                            <div id="boxDuplicate" class="alert alert-secondary py-2 px-3 mb-0 d-flex align-items-center gap-2">
+                                <i id="boxDuplicateIcon" class="bi bi-shield-check fs-5 text-success"></i>
+                                <div class="overflow-hidden">
+                                    <strong class="d-block small text-uppercase">2. Đối Soát Toán Học & Trùng Lặp:</strong>
+                                    <span id="boxDuplicateText" class="small text-truncate d-block">Chưa phát hiện sai lệch</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Ô 3: Trạng Thái Phê Duyệt Của Kế Toán -->
+                        <div class="col-md-4">
+                            <div id="boxConfirm" class="alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2">
+                                <i id="boxConfirmIcon" class="bi bi-hourglass-split fs-5 text-warning"></i>
+                                <div class="overflow-hidden flex-grow-1">
+                                    <strong class="d-block small text-uppercase">3. Xác Nhận Kế Toán:</strong>
+                                    <span id="boxConfirmText" class="small text-truncate d-block">Chờ Kế Toán duyệt</span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-success px-2 py-1 shadow-sm" id="btnToggleConfirm" onclick="toggleConfirmStatus()">
+                                    <i class="bi bi-check2-circle"></i> Duyệt Đạt
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="split-container">
+                        <!-- Left Side: Image Preview -->
+                        <div class="split-left" id="dropZone">
+                            <img src="" id="receiptPreview" class="img-preview d-none" alt="Receipt Preview">
+                            <div id="uploadPrompt" class="dropzone-overlay">
+                                <i class="bi bi-image fs-1 mb-2"></i>
+                                <h6 id="promptTitle">Vui lòng chọn một hóa đơn từ danh sách trên</h6>
+                                <p class="text-secondary small mb-0">Ảnh gốc từ Google Drive sẽ hiển thị tại đây</p>
+                            </div>
+                        </div>
+
+                        <!-- Right Side: 14 Standard Form Fields -->
+                        <div class="split-right">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="text-primary mb-0"><i class="bi bi-pencil-square me-2"></i>14 Cột Chuẩn Google Sheet</h5>
+                                <span id="engineBadge" class="badge bg-secondary">Chưa chọn</span>
+                            </div>
+
+                            <form id="verifyForm">
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold">1. Mã Đối Tượng (DT)</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_dt_code" value="DT1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold">2. Ngày, Tháng, Năm</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_date" placeholder="DD/MM/YYYY">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold">6. Mã HĐ / Vận Đơn</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_order_id">
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label small fw-bold">3. Tên Công Ty / Đơn Vị Bán</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_company">
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small">4. Địa Chỉ Bên Bán</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_seller_address">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">5. Địa Chỉ Bên Nhận</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_buyer_address">
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label small fw-bold">7. Tên Hàng Hóa, Dịch Vụ</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_description">
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label class="form-label small">8. Số Lượng</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_quantity" value="1" oninput="recomputeAmounts()">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small">9. Đơn Giá</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_unit_price" value="0" oninput="recomputeAmounts()">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small">10. % VAT</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_vat_rate" value="0%">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small">11. Tiền VAT</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_vat_amount" value="0">
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-success">12. Thành Tiền</label>
+                                        <input type="text" class="form-control form-control-sm fw-bold text-success" id="f_total_amount" value="0">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small">13. Người Mua / Nhận Hàng</label>
+                                        <input type="text" class="form-control form-control-sm" id="f_buyer_name">
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label small text-danger">14. Ghi Chú</label>
+                                        <textarea class="form-control form-control-sm" id="f_notes" rows="2"></textarea>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-3">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetForm()">
+                                        <i class="bi bi-trash me-1"></i> Xóa Trắng
+                                    </button>
+                                    
+                                    <div class="d-flex gap-2 align-items-center" id="actionButtons">
+                                        <!-- Buttons will toggle depending on mode -->
+                                        <button type="button" class="btn btn-primary btn-sm" id="btnUpdateRecord" onclick="updateHistoricalRecord()">
+                                            <i class="bi bi-check2-circle me-1"></i> Cập Nhật Lên Sheet
+                                        </button>
+                                        <button type="button" class="btn btn-success btn-sm" id="btnConfirmRecord" onclick="confirmHistoricalRecord('x')">
+                                            <i class="bi bi-patch-check me-1"></i> Xác Nhận Hóa Đơn (Đạt)
+                                        </button>
+                                        
+                                        <!-- Hai dấu mũi tên chuyển đổi hóa đơn (Trước / Sau) -->
+                                        <div class="btn-group btn-group-sm" id="navArrowsGroup" role="group">
+                                            <button type="button" class="btn btn-outline-primary" id="btnPrevReceipt" onclick="navigateReceipt(-1)" title="Hóa đơn trước đó">
+                                                <i class="bi bi-arrow-left fw-bold"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary" id="btnNextReceipt" onclick="navigateReceipt(1)" title="Hóa đơn tiếp theo">
+                                                <i class="bi bi-arrow-right fw-bold"></i>
+                                            </button>
+                                        </div>
+
+                                        <button type="button" class="btn btn-success btn-sm d-none" id="btnSaveNewSheet" onclick="saveReceiptData()">
+                                            <i class="bi bi-cloud-arrow-up me-1"></i> Lưu Dòng Mới Vào Sheet
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Floating Toast Notification Container (Góc dưới bên Trái màn hình) -->
+    <div class="toast-container position-fixed bottom-0 start-0 p-3" style="z-index: 1200;">
+        <div id="liveToast" class="toast align-items-center text-bg-success border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body fs-6" id="toastMessage">
+                    <!-- Dynamic Message -->
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/browser/overlayscrollbars.browser.es6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
+    <script src="app.js?v=20260818"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            loadHistoricalRecords();
+            try {
+                const saved = localStorage.getItem('selected_ai_model');
+                const select = document.getElementById('verifyAiModel');
+                if (select) {
+                    if (saved) {
+                        select.value = saved;
+                    } else {
+                        const res = await fetch(`${API_BASE}/config/model`);
+                        const d = await res.json();
+                        if (d.active_model) select.value = d.active_model;
+                    }
+                }
+            } catch (_) {}
+        });
+    </script>
+</body>
+</html>
