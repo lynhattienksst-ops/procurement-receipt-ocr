@@ -477,10 +477,6 @@ function updateStatusBoxes(arg1, arg2, arg3, arg4, arg5) {
                 btnToggle.className = 'btn btn-sm btn-success px-2 py-1 shadow-sm';
                 btnToggle.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Duyệt Đạt';
             }
-            if (badge) {
-                badge.className = 'badge bg-warning text-dark';
-                badge.textContent = 'Chờ Kế Toán Xác Nhận';
-            }
         }
     }
 }
