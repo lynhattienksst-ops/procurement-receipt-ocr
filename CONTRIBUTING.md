@@ -10,7 +10,7 @@ We welcome contributions of all kinds: bug reports, documentation improvements, 
 
 1. **Fork and clone the repository:**
    ```bash
-   git clone https://github.com/your-username/procurement-receipt-ocr.git
+   git clone https://github.com/lynhattienksst-ops/procurement-receipt-ocr.git
    cd procurement-receipt-ocr
    ```
 
@@ -43,5 +43,5 @@ We welcome contributions of all kinds: bug reports, documentation improvements, 
 
 ## 💬 Community & Support
 
-- Report bugs or request features via [GitHub Issues](https://github.com/your-username/procurement-receipt-ocr/issues).
+- Report bugs or request features via [GitHub Issues](https://github.com/lynhattienksst-ops/procurement-receipt-ocr/issues).
 - Submit Pull Requests against the `main` branch.

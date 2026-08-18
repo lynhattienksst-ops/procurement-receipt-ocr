@@ -148,7 +148,7 @@ Hệ thống hỗ trợ cấu trúc chuẩn hóa tự động:
 
 ```bash
 # 1. Clone mã nguồn
-git clone https://github.com/your-username/procurement-receipt-ocr.git
+git clone https://github.com/lynhattienksst-ops/procurement-receipt-ocr.git
 cd procurement-receipt-ocr
 
 # 2. Tạo file cấu hình từ mẫu
