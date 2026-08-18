@@ -175,6 +175,68 @@ let currentSelectedDt = null;
 let currentFile = null;
 let currentMode = 'history'; // 'history' hoặc 'upload'
 
+function resetForm() {
+    const fieldIds = [
+        'f_dt_code', 'f_date', 'f_company', 'f_seller_address', 'f_buyer_address',
+        'f_order_id', 'f_description', 'f_quantity', 'f_unit_price', 'f_vat_rate',
+        'f_vat_amount', 'f_total_amount', 'f_buyer_name', 'f_notes'
+    ];
+    fieldIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    const preview = document.getElementById('receiptPreview');
+    const prompt = document.getElementById('uploadPrompt');
+    const promptTitle = document.getElementById('promptTitle');
+
+    if (preview) {
+        preview.src = '';
+        preview.classList.add('d-none');
+    }
+    if (prompt) {
+        prompt.classList.remove('d-none');
+    }
+    if (promptTitle) {
+        promptTitle.textContent = currentMode === 'upload' 
+            ? "Bấm vào đây để chọn ảnh hóa đơn từ máy tính" 
+            : "Vui lòng chọn một hóa đơn từ danh sách trên";
+    }
+
+    // Reset 3 Status Boxes
+    const boxCat = document.getElementById('boxCategoryTag') || document.getElementById('boxCategory');
+    const iconCat = document.getElementById('boxCategoryIcon');
+    const textCat = document.getElementById('boxCategoryText') || document.getElementById('badgeCategory');
+    if (boxCat && textCat) {
+        boxCat.className = 'alert alert-secondary py-2 px-3 mb-0 d-flex align-items-center gap-2';
+        if (iconCat) iconCat.className = 'bi bi-tag-fill fs-5 text-secondary';
+        textCat.textContent = '--';
+    }
+
+    const boxDup = document.getElementById('boxDuplicate');
+    const iconDup = document.getElementById('boxDuplicateIcon') || document.getElementById('iconDuplicate');
+    const textDup = document.getElementById('boxDuplicateText') || document.getElementById('textDuplicate');
+    if (boxDup && textDup) {
+        boxDup.className = 'alert alert-secondary py-2 px-3 mb-0 d-flex align-items-center gap-2';
+        if (iconDup) iconDup.className = 'bi bi-shield-check fs-5 text-success';
+        textDup.textContent = 'Chưa phát hiện sai lệch';
+    }
+
+    const boxConf = document.getElementById('boxConfirm') || document.getElementById('boxConfirmation');
+    const iconConf = document.getElementById('boxConfirmIcon') || document.getElementById('iconConfirmation');
+    const textConf = document.getElementById('boxConfirmText') || document.getElementById('textConfirmation');
+    const btnToggle = document.getElementById('btnToggleConfirm') || document.getElementById('btnConfirmRecord');
+    if (boxConf && textConf) {
+        boxConf.className = 'alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2 border-warning';
+        if (iconConf) iconConf.className = 'bi bi-hourglass-split fs-5 text-warning';
+        textConf.textContent = 'Chờ Kế Toán duyệt';
+        if (btnToggle) {
+            btnToggle.className = 'btn btn-sm btn-success px-2 py-1 shadow-sm';
+            btnToggle.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Duyệt Đạt';
+        }
+    }
+}
+
 function switchMode(mode) {
     currentMode = mode;
     const historyToolbar = document.getElementById('historyToolbar');
