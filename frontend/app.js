@@ -374,85 +374,105 @@ function applyHistoricalFilters(preferredDtCode = null) {
     }
 }
 
-function updateReceiptStatusCards(isDuplicate, dupMsg, isConfirmed, dtCode, currentRec) {
-    const boxCat = document.getElementById('boxCategory');
-    const badgeCat = document.getElementById('badgeCategory');
-    const descCat = document.getElementById('descCategory');
+function updateStatusBoxes(arg1, arg2, arg3, arg4, arg5) {
+    let record = null;
+    let isDuplicate = false;
+    let dupMsg = '';
+    let isConfirmed = false;
+    let dtCode = '';
 
-    const boxDup = document.getElementById('boxDuplicate');
-    const iconDup = document.getElementById('iconDuplicate');
-    const textDup = document.getElementById('textDuplicate');
-
-    const boxConf = document.getElementById('boxConfirmation');
-    const iconConf = document.getElementById('iconConfirmation');
-    const textConf = document.getElementById('textConfirmation');
-    const btnToggle = document.getElementById('btnToggleConfirm');
-    const badge = document.getElementById('verificationBadge');
-
-    const dtPrefix = (dtCode || '').substring(0, 3).toUpperCase();
-    const mathCheck = checkMathDiscrepancy(currentRec || {});
-    const isDupWarn = (currentRec && (currentRec.notes || '').toUpperCase().includes('NGHI VẤN TRÙNG'));
-
-    // 1. Cập nhật Ô Phân Loại Hóa Đơn
-    if (boxCat && badgeCat && descCat) {
-        if (dtPrefix === 'DT4') {
-            badgeCat.className = 'badge bg-danger fs-6';
-            badgeCat.textContent = '📝 DT4: Hóa Đơn Giấy / Viết Tay';
-            descCat.textContent = 'Biên lai chợ, phiếu thu viết tay cần đối soát mắt.';
-        } else if (dtPrefix === 'DT1') {
-            badgeCat.className = 'badge bg-primary fs-6';
-            badgeCat.textContent = '🛒 DT1: Sàn TMĐT & Vận Chuyển';
-            descCat.textContent = 'Shopee, Lazada, TikTok Shop, SPX Express...';
-        } else if (dtPrefix === 'DT2') {
-            badgeCat.className = 'badge bg-success fs-6';
-            badgeCat.textContent = '🏪 DT2: Siêu Thị & Bán Lẻ';
-            descCat.textContent = 'Co.opmart, WinMart, Big C, Bách Hóa Xanh...';
-        } else if (dtPrefix === 'DT3') {
-            badgeCat.className = 'badge bg-warning text-dark fs-6';
-            badgeCat.textContent = '🌾 DT3: Nông Sản & Thực Phẩm';
-            descCat.textContent = 'Nhà cung ứng thịt cá, rau củ quả...';
-        } else {
-            badgeCat.className = 'badge bg-secondary fs-6';
-            badgeCat.textContent = `📁 ${dtPrefix || 'HÓA ĐƠN'}`;
-            descCat.textContent = 'Hóa đơn mua hàng tiêu chuẩn.';
+    // Signature 1: updateStatusBoxes(record, isDuplicate, dupMsg, confirmed, dtCode)
+    if (arg1 && typeof arg1 === 'object') {
+        record = arg1;
+        isDuplicate = !!arg2;
+        dupMsg = arg3 || '';
+        isConfirmed = !!arg4;
+        dtCode = arg5 || record.dt_code || '';
+    } 
+    // Signature 2: updateStatusBoxes(isDuplicate, dupMsg, isConfirmed, dtCode)
+    else {
+        isDuplicate = !!arg1;
+        dupMsg = arg2 || '';
+        isConfirmed = !!arg3;
+        dtCode = arg4 || currentSelectedDt || '';
+        if (Array.isArray(cachedRecords)) {
+            record = cachedRecords.find(r => r.dt_code === dtCode) || null;
         }
     }
 
-    // 2. Cập nhật Ô Đối Soát Toán Học & Trùng Lặp
-    if (boxDup && iconDup && textDup) {
-        if (isDuplicate || isDupWarn) {
+    const dtPrefix = String(dtCode || '').substring(0, 3).toUpperCase();
+    const mathCheck = checkMathDiscrepancy(record || {});
+    const isDupWarn = isDuplicate || (record && (record.notes || '').toUpperCase().includes('NGHI VẤN TRÙNG'));
+
+    // 1. Cập nhật Ô 1: Phân Loại Đối Tượng
+    const boxCat = document.getElementById('boxCategoryTag') || document.getElementById('boxCategory');
+    const iconCat = document.getElementById('boxCategoryIcon');
+    const textCat = document.getElementById('boxCategoryText') || document.getElementById('badgeCategory');
+
+    if (boxCat && textCat) {
+        if (dtPrefix === 'DT4') {
+            boxCat.className = 'alert alert-danger py-2 px-3 mb-0 d-flex align-items-center gap-2';
+            if (iconCat) iconCat.className = 'bi bi-pencil-square fs-5 text-danger';
+            textCat.textContent = '📝 DT4: Hóa Đơn Giấy / Viết Tay';
+        } else if (dtPrefix === 'DT1') {
+            boxCat.className = 'alert alert-primary py-2 px-3 mb-0 d-flex align-items-center gap-2';
+            if (iconCat) iconCat.className = 'bi bi-cart-check-fill fs-5 text-primary';
+            textCat.textContent = '🛒 DT1: Sàn TMĐT & Vận Chuyển';
+        } else if (dtPrefix === 'DT2') {
+            boxCat.className = 'alert alert-success py-2 px-3 mb-0 d-flex align-items-center gap-2';
+            if (iconCat) iconCat.className = 'bi bi-shop fs-5 text-success';
+            textCat.textContent = '🏪 DT2: Siêu Thị & Bán Lẻ';
+        } else if (dtPrefix === 'DT3') {
+            boxCat.className = 'alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2';
+            if (iconCat) iconCat.className = 'bi bi-basket2-fill fs-5 text-warning';
+            textCat.textContent = '🌾 DT3: Nông Sản & Thực Phẩm';
+        } else {
+            boxCat.className = 'alert alert-secondary py-2 px-3 mb-0 d-flex align-items-center gap-2';
+            if (iconCat) iconCat.className = 'bi bi-tag-fill fs-5 text-secondary';
+            textCat.textContent = `📁 ${dtCode || 'HÓA ĐƠN'}`;
+        }
+    }
+
+    // 2. Cập nhật Ô 2: Đối Soát Toán Học & Trùng Lặp
+    const boxDup = document.getElementById('boxDuplicate');
+    const iconDup = document.getElementById('boxDuplicateIcon') || document.getElementById('iconDuplicate');
+    const textDup = document.getElementById('boxDuplicateText') || document.getElementById('textDuplicate');
+
+    if (boxDup && textDup) {
+        if (isDupWarn) {
             boxDup.className = 'alert alert-danger py-2 px-3 mb-0 d-flex align-items-center gap-2 border-danger';
-            iconDup.className = 'bi bi-exclamation-triangle-fill fs-5 text-danger';
-            textDup.innerHTML = `<span class="fw-bold text-danger">⚠️ NGHI VẤN TRÙNG LẶP:</span> ${dupMsg || (currentRec ? currentRec.notes : '') || 'Mã chứng từ trùng với hóa đơn khác! Vui lòng đối chiếu ảnh và quyết định.'}`;
+            if (iconDup) iconDup.className = 'bi bi-exclamation-triangle-fill fs-5 text-danger';
+            textDup.innerHTML = `<span class="fw-bold text-danger">⚠️ NGHI VẤN TRÙNG:</span> ${dupMsg || (record ? record.notes : '') || 'Mã chứng từ trùng với hóa đơn khác!'}`;
         } else if (mathCheck.hasError) {
             boxDup.className = 'alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2 border-warning';
-            iconDup.className = 'bi bi-calculator-fill fs-5 text-warning';
+            if (iconDup) iconDup.className = 'bi bi-calculator-fill fs-5 text-warning';
             textDup.innerHTML = `<span class="fw-bold text-dark">⚠️ LỆCH TOÁN HỌC:</span> ${mathCheck.message}`;
         } else {
             boxDup.className = 'alert alert-success py-2 px-3 mb-0 d-flex align-items-center gap-2 border-success';
-            iconDup.className = 'bi bi-shield-check fs-5 text-success';
+            if (iconDup) iconDup.className = 'bi bi-shield-check fs-5 text-success';
             textDup.innerHTML = `<span class="text-success fw-bold">✓ Khớp toán học 100%</span> (Không trùng lặp)`;
         }
     }
 
-    // 3. Cập nhật Ô Trạng Thái Xác Nhận
-    if (boxConf && iconConf && textConf) {
+    // 3. Cập nhật Ô 3: Trạng Thái Xác Nhận Kế Toán
+    const boxConf = document.getElementById('boxConfirm') || document.getElementById('boxConfirmation');
+    const iconConf = document.getElementById('boxConfirmIcon') || document.getElementById('iconConfirmation');
+    const textConf = document.getElementById('boxConfirmText') || document.getElementById('textConfirmation');
+    const btnToggle = document.getElementById('btnToggleConfirm') || document.getElementById('btnConfirmRecord');
+
+    if (boxConf && textConf) {
         if (isConfirmed) {
             boxConf.className = 'alert alert-success py-2 px-3 mb-0 d-flex align-items-center gap-2 border-success';
-            iconConf.className = 'bi bi-patch-check-fill fs-5 text-success';
-            textConf.innerHTML = `<strong>ĐÃ DUYỆT ĐẠT:</strong> [${dtCode || ''}] đã được Kế toán duyệt.`;
+            if (iconConf) iconConf.className = 'bi bi-patch-check-fill fs-5 text-success';
+            textConf.innerHTML = `<span class="fw-bold text-success">ĐÃ DUYỆT ĐẠT (x):</span> [${dtCode || ''}]`;
             if (btnToggle) {
                 btnToggle.className = 'btn btn-sm btn-outline-danger px-2 py-1 shadow-sm';
                 btnToggle.innerHTML = '<i class="bi bi-x-circle me-1"></i> Bỏ Duyệt';
             }
-            if (badge) {
-                badge.className = 'badge bg-success';
-                badge.textContent = 'Đã Xác Nhận (Đạt)';
-            }
         } else {
             boxConf.className = 'alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2 border-warning';
-            iconConf.className = 'bi bi-hourglass-split fs-5 text-warning';
-            textConf.innerHTML = `<strong>CHỜ DUYỆT:</strong> [${dtCode || ''}] đang chờ Kế toán đối chiếu.`;
+            if (iconConf) iconConf.className = 'bi bi-hourglass-split fs-5 text-warning';
+            textConf.innerHTML = `<span class="fw-bold text-dark">CHỜ DUYỆT:</span> [${dtCode || ''}]`;
             if (btnToggle) {
                 btnToggle.className = 'btn btn-sm btn-success px-2 py-1 shadow-sm';
                 btnToggle.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Duyệt Đạt';
