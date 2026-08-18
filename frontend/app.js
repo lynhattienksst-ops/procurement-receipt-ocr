@@ -829,6 +829,58 @@ async function confirmHistoricalRecord(status = 'x') {
     }
 }
 
+async function deleteCurrentRecord() {
+    if (!currentSelectedDt) {
+        showToast("Vui lòng chọn một hóa đơn từ danh sách để xóa.", "warning");
+        return;
+    }
+
+    const rec = cachedRecords.find(r => r.dt_code === currentSelectedDt);
+    const merchantName = rec ? (rec.merchant || rec.order_id || '') : '';
+    const confirmPrompt = `⚠️ BẠN CÓ CHẮC CHẮN MUỐN XÓA?\n\nHóa đơn [${currentSelectedDt}] ${merchantName ? '(' + merchantName + ')' : ''} sẽ bị XÓA VĨNH VIỄN khỏi Google Sheet (cả Bảng Kê và Link Ảnh).\n\nHành động này không thể hoàn tác!`;
+
+    if (!confirm(confirmPrompt)) {
+        return;
+    }
+
+    const btnDelete = document.getElementById('btnDeleteRecord');
+    if (btnDelete) {
+        btnDelete.disabled = true;
+        btnDelete.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang xóa...';
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/sheets/record/${encodeURIComponent(currentSelectedDt)}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            showToast(`🗑️ Đã xóa thành công hóa đơn [${currentSelectedDt}] khỏi Google Sheet!`, 'success');
+            
+            const deletedCode = currentSelectedDt;
+            cachedRecords = cachedRecords.filter(r => r.dt_code !== deletedCode);
+            currentFilteredRecords = currentFilteredRecords.filter(r => r.dt_code !== deletedCode);
+
+            if (currentFilteredRecords.length > 0) {
+                applyHistoricalFilters();
+            } else {
+                loadHistoricalRecords();
+            }
+        } else {
+            showToast(`Lỗi khi xóa: ${data.detail || data.error || 'Không xác định'}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Lỗi khi xóa hóa đơn:', error);
+        showToast(`Lỗi kết nối Server: ${error.message}`, 'danger');
+    } finally {
+        if (btnDelete) {
+            btnDelete.disabled = false;
+            btnDelete.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Xóa Khỏi Sheet';
+        }
+    }
+}
+
 
 // ----------------------------------------------------
 // PHẦN 2: TẢI ẢNH MỚI LÊN ĐỐI CHIẾU
