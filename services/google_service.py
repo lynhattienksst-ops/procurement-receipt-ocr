@@ -637,6 +637,65 @@ class GoogleSyncService:
             logger.error(f"Error updating sheet row for {dt_code}: {e}")
             return {"success": False, "error": str(e)}
 
+    def delete_sheet_record(self, dt_code: str, spreadsheet_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Permanently delete a record and all its associated rows from Bang_Ke_Hoa_Don and Links_Hoa_Don.
+        """
+        if not self.sheets_service:
+            self._init_auth()
+        if not self.sheets_service:
+            raise RuntimeError("Google Sheets service is not connected.")
+
+        target_sheet_id = spreadsheet_id or os.getenv("GOOGLE_SHEET_ID")
+        main_tab = os.getenv("GOOGLE_SHEET_NAME", "Bang_Ke_Hoa_Don")
+        links_tab = os.getenv("GOOGLE_SHEET_LINKS_NAME", "Links_Hoa_Don")
+
+        dt_target = str(dt_code).strip().upper()
+        if not dt_target:
+            return {"success": False, "error": "Thiếu mã đối tượng dt_code"}
+
+        try:
+            main_rows = self.get_sheet_data(target_sheet_id, main_tab)
+            links_rows = self.get_sheet_data(target_sheet_id, links_tab)
+
+            new_main_rows = []
+            deleted_main_count = 0
+            for idx, r in enumerate(main_rows):
+                if not r:
+                    continue
+                row_dt = str(r[0]).strip().upper() if len(r) > 0 else ""
+                if idx > 0 and row_dt == dt_target:
+                    deleted_main_count += 1
+                else:
+                    new_main_rows.append(r)
+
+            new_links_rows = []
+            deleted_links_count = 0
+            for idx, r in enumerate(links_rows):
+                if not r:
+                    continue
+                row_dt = str(r[0]).strip().upper() if len(r) > 0 else ""
+                if idx > 0 and row_dt == dt_target:
+                    deleted_links_count += 1
+                else:
+                    new_links_rows.append(r)
+
+            if deleted_main_count > 0:
+                self.overwrite_sheet_data(new_main_rows, target_sheet_id=target_sheet_id, target_tab=main_tab)
+            if deleted_links_count > 0:
+                self.overwrite_sheet_data(new_links_rows, target_sheet_id=target_sheet_id, target_tab=links_tab)
+
+            logger.info(f"Deleted record {dt_target}: {deleted_main_count} rows from {main_tab}, {deleted_links_count} rows from {links_tab}")
+            return {
+                "success": True,
+                "deleted_main_rows": deleted_main_count,
+                "deleted_links_rows": deleted_links_count,
+                "message": f"Đã xóa thành công hóa đơn [{dt_target}] khỏi Google Sheet."
+            }
+        except Exception as e:
+            logger.error(f"Error deleting sheet record {dt_target}: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
 
     def get_historical_records(self) -> List[Dict[str, Any]]:
         """

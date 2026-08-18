@@ -184,24 +184,58 @@ def compute_item_vat_and_pricing(
     return unit_price_before_tax, vat_rate_str, vat_amount_out, line_total
 
 
+def assemble_notes(
+    existing_notes: str = "",
+    tracking_no: str = "",
+    vat_alert: str = "",
+    fallback_default: str = ""
+) -> str:
+    """
+    Combine all notes non-destructively:
+    - Preserves existing custom notes, duplicate warnings, and manual edits
+    - Appends tracking number if present and not yet in note
+    - Appends VAT alerts if present and not yet in note
+    """
+    parts = []
+    e_note = str(existing_notes or "").strip()
+    if e_note:
+        parts.append(e_note)
+
+    tr = str(tracking_no or "").strip()
+    if tr:
+        tr_label = f"Mã vận đơn: {tr}"
+        if tr not in e_note:
+            parts.append(tr_label)
+
+    va = str(vat_alert or "").strip()
+    if va:
+        va_label = f"[VAT] {va}" if not va.startswith("[") else va
+        if va not in e_note:
+            parts.append(va_label)
+
+    if not parts and fallback_default:
+        parts.append(fallback_default)
+
+    return " | ".join(parts).strip() if parts else ""
+
+
 def format_receipt_to_sheet_rows(
     data: Dict[str, Any],
     category_id: int,
-    current_index: int
+    current_index: int = 1
 ) -> Tuple[List[List[Any]], Dict[str, Any]]:
     """
-    Format the receipt JSON into one or more Google Sheet rows based on the 14-Column Schema.
-    Generates standard sequential DTnXXXX code for the business category.
+    Format extracted receipt JSON into standard 14-column Google Sheet rows.
     """
     dt_code = f"DT{category_id}{current_index:04d}"
 
-    date_str = str(data.get("transaction_date") or "")
-    time_str = str(data.get("transaction_time") or "")
+    date_str = str(data.get("transaction_date") or data.get("date") or "").strip()
+    time_str = str(data.get("transaction_time") or data.get("time") or "").strip()
     full_datetime = f"'{date_str} {time_str}".strip() if (date_str or time_str) else ""
 
-    merchant_name = str(data.get("merchant_name") or "")
-    merchant_addr = str(data.get("merchant_address") or "")
-    customer_name = str(data.get("customer_name") or "").strip()
+    merchant_name = str(data.get("merchant_name") or data.get("seller_name") or data.get("company_name") or "").strip()
+    merchant_addr = str(data.get("merchant_address") or data.get("seller_address") or "").strip()
+    customer_name = str(data.get("customer_name") or data.get("buyer_name") or "").strip()
     customer_addr = str(data.get("customer_address") or "").strip()
     doc_code = str(data.get("invoice_number") or data.get("receipt_number") or data.get("tracking_number") or "")
     order_id = str(data.get("order_id") or "")
@@ -221,9 +255,12 @@ def format_receipt_to_sheet_rows(
     # ĐỐI TƯỢNG 1: Sàn TMĐT & Dịch vụ giao nhận hàng
     # =========================================================================
     if category_id == 1:
-        tracking_no = str(data.get("tracking_number") or "")
-        
-        items_note = f"Mã vận đơn: {tracking_no}" if tracking_no else str(data.get("notes") or "")
+        tracking_no = str(data.get("tracking_number") or "").strip()
+        items_note = assemble_notes(
+            existing_notes=data.get("notes"),
+            tracking_no=tracking_no,
+            vat_alert=vat_alert if has_vat else ""
+        )
 
         items_summary_list = []
         if line_items:
@@ -291,7 +328,7 @@ def format_receipt_to_sheet_rows(
             v_amt,                                                  # Cột K: VAT
             l_total,                                                # Cột L: Thành tiền (Tổng tiền đơn)
             customer_name,                                          # Cột M: Người nhận hàng
-            items_note                                              # Cột N: Mã vận đơn
+            items_note                                              # Cột N: Mã vận đơn & Ghi chú
         ]
         rows.append(row)
 
@@ -299,6 +336,10 @@ def format_receipt_to_sheet_rows(
     # ĐỐI TƯỢNG 2: Siêu thị, cửa hàng bán lẻ, cửa hàng tiện lợi
     # =========================================================================
     elif category_id == 2:
+        cat_note = assemble_notes(
+            existing_notes=data.get("notes"),
+            vat_alert=vat_alert if has_vat else ""
+        )
         if line_items:
             for it in line_items:
                 iname = str(it.get("item_name") or "").strip()
@@ -322,7 +363,7 @@ def format_receipt_to_sheet_rows(
                     v_amt,                              # Cột K: VAT
                     l_total,                            # Cột L: Thành tiền
                     customer_name,                      # Cột M: Người mua/nhận hàng
-                    vat_alert if vat_alert else ""      # Cột N: Ghi chú
+                    cat_note                            # Cột N: Ghi chú
                 ]
                 rows.append(row)
         else:
@@ -340,7 +381,7 @@ def format_receipt_to_sheet_rows(
                 invoice_tax_amount if invoice_tax_amount > 0 else 0,
                 total_amount if total_amount is not None else 0,
                 customer_name,
-                vat_alert if vat_alert else ""
+                cat_note
             ]
             rows.append(row)
 
@@ -348,6 +389,10 @@ def format_receipt_to_sheet_rows(
     # ĐỐI TƯỢNG 3: Doanh nghiệp cung ứng thực phẩm
     # =========================================================================
     elif category_id == 3:
+        cat_note = assemble_notes(
+            existing_notes=data.get("notes"),
+            vat_alert=vat_alert if has_vat else ""
+        )
         valid_items = []
         for it in line_items:
             iname = str(it.get("item_name") or "")
@@ -378,7 +423,7 @@ def format_receipt_to_sheet_rows(
                     v_amt,                              # Cột K: VAT
                     l_total,                            # Cột L: Thành tiền
                     customer_name,                      # Cột M: Người mua/nhận hàng
-                    vat_alert if vat_alert else ""      # Cột N: Ghi chú
+                    cat_note                            # Cột N: Ghi chú
                 ]
                 rows.append(row)
         else:
@@ -396,7 +441,7 @@ def format_receipt_to_sheet_rows(
                 invoice_tax_amount if invoice_tax_amount > 0 else 0,
                 total_amount if total_amount is not None else 0,
                 customer_name,
-                vat_alert if vat_alert else ""
+                cat_note
             ]
             rows.append(row)
 
@@ -404,6 +449,10 @@ def format_receipt_to_sheet_rows(
     # ĐỐI TƯỢNG 4: Hóa đơn viết tay & Không xác định danh tính
     # =========================================================================
     elif category_id == 4:
+        cat_note = assemble_notes(
+            existing_notes=data.get("notes"),
+            fallback_default="Hóa đơn / Giấy viết tay"
+        )
         if line_items:
             for it in line_items:
                 iname = str(it.get("item_name") or "").strip()
@@ -425,7 +474,7 @@ def format_receipt_to_sheet_rows(
                     0,                                  # Cột K: VAT
                     itotal if itotal != "" else ((float(iprice)*float(iqty)) if (iprice and iqty) else 0), # Cột L: Thành tiền
                     customer_name,                      # Cột M: Người mua/nhận hàng (nếu có)
-                    "Hóa đơn / Giấy viết tay"           # Cột N: Ghi chú
+                    cat_note                            # Cột N: Ghi chú
                 ]
                 rows.append(row)
         else:

@@ -678,6 +678,26 @@ async def confirm_sheet_record(payload: dict = Body(...)):
         logger.error(f"Error confirming sheet record: {e}")
         raise HTTPException(status_code=500, detail=f"Lỗi xác nhận: {str(e)}")
 
+@app.delete("/api/v1/sheets/record/{dt_code}")
+async def delete_sheet_record(dt_code: str):
+    """
+    Permanently delete a record from Bang_Ke_Hoa_Don and Links_Hoa_Don.
+    """
+    clean_dt = dt_code.strip()
+    if not clean_dt:
+        raise HTTPException(status_code=400, detail="Thiếu mã đối tượng dt_code.")
+    async with scan_lock:
+        try:
+            res = await asyncio.to_thread(google_service.delete_sheet_record, clean_dt)
+            if not res.get("success"):
+                raise HTTPException(status_code=400, detail=res.get("error", "Xóa hóa đơn thất bại."))
+            return res
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting sheet record {clean_dt}: {e}")
+            raise HTTPException(status_code=500, detail=f"Lỗi khi xóa hóa đơn: {str(e)}")
+
 @app.get("/api/v1/audit/reconciliation")
 async def get_audit_reconciliation():
     """
