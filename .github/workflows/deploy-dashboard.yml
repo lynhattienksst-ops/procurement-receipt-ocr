@@ -1,0 +1,70 @@
+name: Deploy Dashboard to Cloud Run
+
+# Builds dashboard/Dockerfile and deploys it to Cloud Run.
+# Auth is keyless via Workload Identity Federation (set up once by
+# dashboard/bootstrap_gcp.sh). The OCR server / test suite is unaffected —
+# the existing ci.yml still runs the pytest suite on the same push.
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "dashboard/**"
+      - "services/**"
+      - ".github/workflows/deploy-dashboard.yml"
+  workflow_dispatch:
+
+env:
+  REGION: asia-southeast1
+  SERVICE: procurement-dashboard
+  AR_REPO: dashboard
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build & push image
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${AR_REPO}/${SERVICE}:${GITHUB_SHA}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker build -f dashboard/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        run: |
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gcloud run deploy "${SERVICE}" \
+            --image "$IMAGE" \
+            --region "${REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --service-account "${{ secrets.GCP_RUNTIME_SA }}" \
+            --cpu 1 --memory 512Mi \
+            --min-instances 0 --max-instances 3 --concurrency 40 --timeout 30 \
+            --set-env-vars "^@@^DASHBOARD_TOKEN=${{ secrets.DASHBOARD_TOKEN }}@@GOOGLE_SHEET_ID=${{ secrets.GOOGLE_SHEET_ID }}@@GOOGLE_SHEET_HEADER_NAME=Data_Header_V2@@GOOGLE_SHEET_LINES_NAME=Data_Lines_V2@@BUILD_SHA=${GITHUB_SHA}@@BUILD_TIME=${BUILD_TIME}"
+
+      - name: Output service URL
+        run: |
+          URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --format 'value(status.url)')"
+          echo "### Dashboard deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Base URL: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Open: \`\$URL/d/<DASHBOARD_TOKEN>\`" >> "$GITHUB_STEP_SUMMARY"
