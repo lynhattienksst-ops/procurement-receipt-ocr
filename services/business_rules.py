@@ -16,13 +16,15 @@ CAT1_KEYWORDS = [
     "ninja van", "best express", "chuyển phát nhanh", "phiếu gửi hàng", "vận đơn"
 ]
 
-# Keywords for Category 2: Supermarkets, retail chains, convenience stores
+# Keywords for Category 2: Supermarkets, shopping malls, retail chains, electronic/apparel/book/pharma stores, general retail
 CAT2_KEYWORDS = [
     "co.opmart", "coopmart", "co.op food", "winmart", "winmart+", "vinmart",
     "big c", "go!", "tops market", "lotte mart", "aeon", "aeon mall", "mega market",
     "emart", "circle k", "7-eleven", "7 eleven", "familymart", "gs25", "ministop",
     "bách hóa xanh", "bach hoa xanh", "guardian", "watsons", "con cưng", "concung",
-    "thế giới di động", "dien may xanh", "fpt shop", "siêu thị", "mart", "store"
+    "thế giới di động", "dien may xanh", "fpt shop", "siêu thị", "mart", "store",
+    "nhà sách", "fahasa", "tiệm", "cửa hàng", "shop", "trung tâm thương mại", "plaza", "mall",
+    "điện máy", "thời trang", "gia dụng", "nhà thuốc", "pharmacity", "long châu"
 ]
 
 # Keywords for Category 3: Food suppliers, agricultural produce, fresh food wholesale
@@ -36,36 +38,368 @@ CAT3_KEYWORDS = [
 REMOVAL_TAG = "(loại bỏ)"
 
 
+# =============================================================================
+# Phân loại loại-hàng ở CẤP DÒNG (Data_Lines_V2, Cột M "Nhóm hàng")
+# ADR line-item-grouping — trục kế toán chi phí VN (TK 152/153/156/627/641/642).
+# 1 nguồn sự thật: dict dưới đây. KHÔNG lặp keyword vào regex trong hàm.
+# =============================================================================
+
+LINE_GROUP_CODES = [
+    "NL_TP",     # Nguyên liệu / thực phẩm tươi        (TK 152 / 611)
+    "HH_BAN",    # Hàng hóa mua để bán / vật tư tiêu hao (TK 156 / 152)
+    "CCDC_TS",   # Công cụ, dụng cụ & tài sản           (TK 153 / 211)
+    "DV_VC",     # Dịch vụ vận chuyển / logistics       (TK 641 / 627)
+    "DV_SAN",    # Phí sàn TMĐT / hoa hồng              (TK 641)
+    "DV_KHAC",   # Dịch vụ khác                        (TK 627 / 642)
+    "VP_PHAM",   # Văn phòng phẩm & tiện ích            (TK 642)
+    "KHAC",      # Khác (đã phân loại, không thuộc trên)
+    "CAN_SOAT",  # Chưa phân loại được / độ tin cậy thấp → người soát
+]
+
+# THỨ TỰ ƯU TIÊN CỐ ĐỊNH khi duyệt (dịch vụ trước hàng hóa để "phí ..." không bị
+# nuốt bởi từ khóa hàng hóa; HH_BAN xét cuối vì token bao bì dễ trùng).
+LINE_GROUP_PRIORITY = [
+    "DV_VC", "DV_SAN", "NL_TP", "CCDC_TS", "VP_PHAM", "DV_KHAC", "HH_BAN",
+]
+
+LINE_GROUP_KEYWORDS: Dict[str, List[str]] = {
+    "DV_VC": [
+        "phí vận chuyển", "phí ship", "cước", "cước vận chuyển", "giao hàng",
+        "phí giao hàng", "freight", "logistics", "phí giao vận", "delivery fee",
+        "shipping fee", "chi phí vận chuyển", "vận chuyển",
+        "phí vc", "tiền ship", "phí gh",
+    ],
+    "DV_SAN": [
+        "phí sàn", "phí dịch vụ shopee", "phí dịch vụ lazada", "phí dịch vụ tiktok",
+        "hoa hồng", "phí thanh toán", "phí quảng cáo", "phí cố định", "phí xử lý đơn",
+        "phí hạ tầng", "commission", "phí dịch vụ tmđt", "phí nền tảng",
+    ],
+    "NL_TP": [
+        "rau", "củ", "quả", "trái cây", "hoa quả", "thịt", "heo", "bò", "gà", "cá",
+        "tôm", "cua", "mực", "ghẹ", "trứng", "gạo", "nếp", "gia vị", "nước mắm",
+        "dầu ăn", "hạt nêm", "bột ngọt", "nấm", "hải sản", "thủy sản", "bún", "phở",
+        "mì", "hủ tiếu", "đường", "muối", "sữa tươi", "tàu hũ", "đậu", "nông sản",
+        # Nước chấm / sốt / gia vị đóng chai
+        "nước tương", "tương cà", "tương ớt", "tương đen", "xì dầu", "dầu hào",
+        "sa tế", "mắm", "sốt", "syrup", "siro", "sirô", "mật ong", "đường phèn",
+        # Trà / cà phê / bột pha chế
+        "trà", "oolong", "ô long", "hồng trà", "lục trà", "cà phê", "cafe", "caphe",
+        "cacao", "ca cao", "matcha", "bột sữa", "bột béo", "kem béo", "topping",
+        "trân châu", "thạch", "mứt", "cốt dừa", "nước cốt",
+        # Bánh / thực phẩm chế biến sẵn
+        "bánh", "croissant", "pain au chocolate", "pate chaud", "pate", "pâté",
+        "sandwich", "phô mai", "phomai", "bơ lạt", "bột mì", "men", "kem tươi",
+        "whipping", "chocolate", "socola", "sô cô la",
+        # Rau củ khô / hạt / đồ khô
+        "hành", "tỏi", "gừng", "sả", "ớt", "tiêu", "hạt", "mè", "vừng", "nước dừa",
+        "sữa đặc", "sữa hạt", "nước ép", "nước trái cây",
+        # Trái cây đóng lon / đóng hộp, hoa - thảo mộc pha trà, bột & sữa pha chế
+        "đào lon", "vải lon", "vài lon", "lon boddob", "nhãn lon", "chôm chôm lon",
+        "cà chua", "quế tây", "sweet basil", "húng quế",
+        "bông cúc", "hoa cúc", "cúc khô", "nụ hồng", "hoa hồng khô", "hoa lài",
+        "atiso", "hoa đậu biếc", "cỏ ngọt", "la hán", "kỷ tử", "táo đỏ", "táo tàu",
+        "long nhãn", "hạt chia", "sen", "đông trùng",
+        "sấy khô", "sấy dẻo", "sấy giòn", "cam sấy", "dừa sữa", "kem dừa", "thập cẩm",
+        "nif lon", "kỳ tử",
+        "bột frappe", "frappe", "milk foam", "milkfoam", "bột milk", "bột dp",
+        "bột pha", "bột hoa anh đào", "bột khoai", "bột taro", "bột trà",
+        "sữa tiệt trùng", "sữa tươi tiệt trùng", "milklab", "sữa milk", "rich vị sữa",
+        "rich vị", "vị sữa", "creamer", "kem sữa", "sữa bột", "condensed",
+    ],
+    "CCDC_TS": [
+        "nồi", "chảo", "xoong", "dao", "thớt", "tô", "chén", "đĩa", "dĩa", "ly",
+        "cốc", "khay", "kệ", "bàn", "ghế", "tủ", "máy", "bếp", "quạt", "đèn",
+        "thiết bị", "dụng cụ",
+        # Dụng cụ pha chế / định lượng / bar
+        "ca đong", "cốc đong", "thìa định lượng", "muỗng", "muống", "phới", "phới vét",
+        "thìa", "thia", "nĩa", "nỉa", "đũa", "vá", "sạn", "vích",
+        "spatula", "barspoon", "bar spoon", "xúc đá", "gắp đá", "kẹp gắp", "kẹp đá",
+        "rây", "vợt", "chày", "cối", "khuôn", "cân", "cân điện tử", "đồng hồ bấm giờ",
+        "bình xịt kem", "cream whipper", "bình bơm", "bình đựng", "bình ủ", "bình lắc",
+        "shaker", "jigger", "lọ rắc", "hũ", "hộp đựng", "khay đựng", "rổ", "giá đỡ",
+        "kệ inox", "xe đẩy", "tủ mát", "tủ đông", "tủ lạnh", "lò", "lò nướng",
+        "máy xay", "máy ép", "máy đánh", "máy pha", "máy làm", "bình thủy",
+        "khoan", "kìm", "cọ", "cưa", "búa", "tua vít", "mũi khoan", "lưỡi cưa",
+        "két đựng tiền", "két sắt", "loa", "amply", "ampli", "micro", "tivi", "tv",
+        "led", "màn hình", "camera", "quầy", "tách sứ", "bộ tách", "ấm", "phin",
+        "fin", "cây lau", "chổi", "sọt rác", "thùng rác", "thau", "chậu",
+    ],
+    "VP_PHAM": [
+        "giấy", "bút", "viết", "mực in", "sổ", "kẹp", "băng keo", "băng dính",
+        "file", "bìa", "ghim", "phong bì", "tiền điện", "tiền nước", "cước internet",
+        "hóa đơn điện", "hóa đơn nước",
+        "máy in", "giấy in", "giấy in bill", "cuộn bill", "giấy nhiệt", "mực máy in",
+    ],
+    "DV_KHAC": [
+        "thuê", "cho thuê", "phần mềm", "license", "marketing", "quảng cáo",
+        "sửa chữa", "bảo trì", "tư vấn", "phí ngân hàng", "phí chuyển khoản",
+        "phí quản lý", "dịch vụ vệ sinh",
+        "thi công", "lắp đặt", "lắp ráp", "vận hành", "in ấn", "thiết kế",
+        "chụp hình", "quay phim", "đồng phục", "áo đồng phục", "thẻ bảo hành",
+        "gói bảo hành", "phí dịch vụ", "công lắp", "nhân công", "công thợ",
+        "công chuyển", "tiền công", "công tháo", "công vệ sinh", "phí thi công",
+    ],
+    "HH_BAN": [
+        "túi", "bao bì", "hộp", "ly nhựa", "ống hút", "màng bọc", "khăn giấy",
+        "nilon", "nylon", "thùng carton", "hộp giấy", "tem", "nhãn",
+        # Vật tư tiêu hao / bao gói phục vụ bán hàng
+        "ly giấy", "cốc giấy", "nắp ly", "nắp cốc", "muỗng nhựa", "nĩa nhựa",
+        "dao nhựa", "hộp nhựa", "hộp bã mía", "tô giấy", "chén nhựa", "dĩa nhựa",
+        "khay giấy", "giấy gói", "giấy lót", "giấy thấm dầu", "màng pe", "màng bọc thực phẩm",
+        "dây rút", "dây buộc", "que khuấy", "que tre", "tăm", "khăn ướt", "khăn lạnh",
+        "găng tay", "bao tay", "bao tay cao su", "khẩu trang", "túi zip", "túi zipper",
+        "bịch", "bao pp", "bao bố", "thùng xốp", "xốp", "đá gel", "đá khô",
+        "ống ldpe", "ống pe", "ống nhựa", "ống hút giấy", "ống hút nhựa", "ldpe",
+        "dây thun", "thun", "chun", "kẽm", "bao pe",
+        # Vật tư lắp đặt / phần cứng lặt vặt (hóa đơn thi công, sửa chữa)
+        "nẹp", "co góc", "co nối", "ống đồng", "ống 9", "ống 6", "béc phun", "béc",
+        "ren 13", "ren 9", "lọc 3 cấp", "đuôi chuột", "bản mã", "bát gốc", "que 30",
+        "vật tư phụ",
+    ],
+}
+
+# Gợi ý từ đơn vị tính khi tên hàng không khớp keyword nào.
+_UNIT_HINT_NL_TP = {"kg", "g", "gram", "bó", "mớ", "con", "quả", "trái", "lít", "lit", "chục", "ký"}
+_UNIT_HINT_DV_KHAC = {"lần", "tháng", "gói"}
+
+# Tên hàng "rỗng nghĩa" — dòng gộp / placeholder → cần người soát.
+_LOW_CONF_NAMES = {
+    "", "đơn hàng tmđt", "don hang tmdt", "hóa đơn", "hoa don", "hóa đơn mua hàng",
+    "hoá đơn mua hàng", "hoa don mua hang", "hàng hóa viết tay", "hang hoa viet tay",
+    "cung ứng thực phẩm", "cung ung thuc pham",
+}
+
+
+def classify_line_item(item_name: Any, unit: Any = "", is_dt1: bool = False) -> Tuple[str, str]:
+    """
+    Phân loại 1 dòng hàng vào 1 nhóm loại-hàng (trục kế toán chi phí).
+
+    Trả về ``(group_code, source)`` với:
+      - ``group_code`` ∈ ``LINE_GROUP_CODES``
+      - ``source`` ∈ {"rule:keyword", "rule:category", "unit_hint", "auto_default", "low_conf"}
+        ("manual" chỉ do người dùng sửa tay trên verify.html — không sinh ở đây)
+
+    ``is_dt1=True`` (dòng gộp cả đơn của nhóm Sàn TMĐT / Vận chuyển): dòng gộp trộn
+    nhiều loại hàng nên KHÔNG phân chi tiết. Chỉ 3 khả năng — hai loại chứng từ/chi
+    phí tách bạch được bằng từ khóa (``DV_SAN`` phí sàn, ``DV_VC`` phí vận chuyển),
+    phần còn lại là tiền hàng hóa mua vào → mặc định ``HH_BAN`` (nguồn ``rule:category``).
+    """
+    name = re.sub(r"\s+", " ", str(item_name or "").strip().lower())
+    u = str(unit or "").strip().lower()
+
+    if is_dt1:
+        for group in ("DV_VC", "DV_SAN"):
+            for kw in LINE_GROUP_KEYWORDS.get(group, []):
+                if kw in name:
+                    return group, "rule:keyword"
+        return "HH_BAN", "rule:category"
+
+    # 2. Duyệt keyword theo thứ tự ưu tiên cố định (substring match, đủ cho tiếng Việt có dấu).
+    for group in LINE_GROUP_PRIORITY:
+        for kw in LINE_GROUP_KEYWORDS.get(group, []):
+            if kw in name:
+                return group, "rule:keyword"
+
+    # 3. Gợi ý từ đơn vị tính.
+    if u in _UNIT_HINT_NL_TP:
+        return "NL_TP", "unit_hint"
+    if u in _UNIT_HINT_DV_KHAC:
+        return "DV_KHAC", "unit_hint"
+
+    # 4. Không match.
+    if name in _LOW_CONF_NAMES:
+        return "CAN_SOAT", "low_conf"
+    return "KHAC", "auto_default"
+
+
+def parse_vietnamese_number(val: Any) -> float:
+    """
+    Parse numbers formatted in Vietnamese style (e.g. '387.997,00 đ', '100.000,00', '1.250.000')
+    or raw numbers, preserving exact numbers without rounding.
+    100.000,00 = 100000 (một trăm ngàn).
+    """
+    if val is None or val == "":
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+
+    s = str(val).strip()
+    for suffix in ["đ", "Đ", "vnđ", "VNĐ", "vnd", "VND", "₫", "$"]:
+        s = s.replace(suffix, "")
+    s = s.strip()
+    if not s:
+        return 0.0
+
+    if "." in s and "," in s:
+        last_dot = s.rfind(".")
+        last_comma = s.rfind(",")
+        if last_comma > last_dot:
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "," in s and "." not in s:
+        parts = s.split(",")
+        if len(parts) == 2 and len(parts[1]) in [1, 2]:
+            s = s.replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "." in s and "," not in s:
+        parts = s.split(".")
+        if len(parts) == 2:
+            if parts[0] == "0" or (len(parts[1]) in [1, 2] and len(parts[0]) <= 3 and not (len(parts[1]) == 2 and parts[1] == "00")):
+                # Decimal e.g. 0.5, 0.50, 1.25, 2.75
+                pass
+            else:
+                s = s.replace(".", "")
+        else:
+            s = s.replace(".", "")
+
+    try:
+        val_f = float(s)
+        return int(val_f) if val_f.is_integer() else val_f
+    except ValueError:
+        return 0.0
+
+
+def clean_num(val: Any) -> float:
+    """
+    Coerce any sheet cell (may carry '%', 'đ', 'VND', thousands separators) to a
+    plain float, always returning a number (0.0 on failure). Thin wrapper over
+    parse_vietnamese_number with an extra comma-stripping fallback.
+    Used by server.py's /api/v1/sheets/reconcile-totals endpoint.
+    """
+    if val is None or str(val).strip() == "":
+        return 0.0
+    try:
+        s = str(val).replace("%", "").replace("đ", "").replace("VND", "").replace("vnd", "").strip()
+        num = parse_vietnamese_number(s)
+        return float(num)
+    except Exception:
+        try:
+            return float(str(val).replace(",", "").strip())
+        except Exception:
+            return 0.0
+
+
+def format_vietnamese_currency(val: Any) -> str:
+    """
+    Format a numeric amount to Vietnamese number format with decimals and currency symbol ' đ'.
+    """
+    if val is None or val == "":
+        return "0,00 đ"
+    
+    if isinstance(val, str):
+        val_str = val.strip()
+        if val_str.endswith(" đ"):
+            return val_str
+        try:
+            clean_str = val_str.replace(".", "").replace(",", ".")
+            val = float(clean_str)
+        except ValueError:
+            return f"{val_str} đ"
+
+    try:
+        f = float(val)
+        formatted = f"{f:,.2f}"
+        parts = formatted.split('.')
+        integer_part = parts[0].replace(",", ".")
+        decimal_part = parts[1]
+        return f"{integer_part},{decimal_part} đ"
+    except (ValueError, TypeError):
+        return "0,00 đ"
+
+
 def detect_business_category(data: Dict[str, Any]) -> Tuple[int, str]:
     """
-    Detect the business category (1, 2, 3, 4) from parsed receipt JSON data.
-    Returns: (category_id, category_name)
+    Content-Driven Business Object Categorization Engine (DT1..DT4).
+    Analyzes full semantic content: Legal entity, Tax ID, Item lines, Marketplace/courier brands, and Handwriting.
     """
-    merchant_name = str(data.get("merchant_name") or "").lower()
-    merchant_addr = str(data.get("merchant_address") or "").lower()
-    tracking_no = str(data.get("tracking_number") or data.get("order_id") or "").lower()
+    merchant_name = str(data.get("merchant_name") or data.get("seller_name") or data.get("company_name") or "").strip()
+    merchant_lower = merchant_name.lower()
+    seller_tax_id = str(data.get("seller_tax_id") or data.get("tax_id") or "").strip()
+    
+    # 1. Line items text content
+    line_items = data.get("line_items") or []
+    items_text = " ".join([str(it.get("item_name") or "") for it in line_items]).lower()
+    
+    # Text for domain checking
+    core_entity_text = f"{merchant_lower} {items_text}"
     notes = str(data.get("notes") or "").lower()
-    raw_text = f"{merchant_name} {merchant_addr} {tracking_no} {notes}"
+    full_text = f"{merchant_lower} {items_text} {notes}"
 
-    # Category 1: E-commerce platforms & Delivery
-    if tracking_no or any(k in raw_text for k in CAT1_KEYWORDS):
+    # Check flags from OCR
+    category_hint = str(data.get("category_hint") or "").upper().strip()
+    is_company_flag = bool(data.get("is_company_invoice", False))
+    is_ecom_flag = bool(data.get("is_ecom_shipping_label", False))
+    is_handwritten_flag = bool(data.get("is_handwritten", False))
+
+    # 1. Detect Legal Entity / Company Indicators
+    has_company_prefix = any(p in merchant_lower for p in [
+        "công ty", "tnhh", "cổ phần", "cp ", "dntn", "doanh nghiệp", "chi nhánh", "tập đoàn", "xí nghiệp", "hợp tác xã"
+    ])
+    has_valid_tax_id = bool(re.search(r"\b\d{10}(-\d{3})?\b", seller_tax_id or full_text))
+    is_confirmed_company = has_company_prefix or has_valid_tax_id or is_company_flag
+
+    # 2. Check Food / Agricultural Produce keywords using exact word boundaries
+    food_pattern = re.compile(
+        r"\b(thực phẩm|nông sản|rau củ|rau|củ quả|trái cây|hoa quả|thịt|cá tươi|hải sản|thủy sản|tôm|cua|mực|"
+        r"trứng|gạo|nếp|gia vị|nước mắm|dầu ăn|hạt nêm|nấm tươi|nấm rơm|thực phẩm tươi|thực phẩm sạch|"
+        r"kamereo|la paz foods|la paz|thực phẩm số một|food supply|fresh food)\b",
+        re.IGNORECASE
+    )
+    has_food_keywords = bool(food_pattern.search(core_entity_text))
+
+    # 3. Check E-Commerce / Courier Platform keywords
+    ecom_pattern = re.compile(
+        r"\b(shopee|spx|spx express|lazada|tiktok shop|tiktok|tiki|"
+        r"giao hàng tiết kiệm|ghtk|giao hàng nhanh|ghn|viettel post|viettelpost|"
+        r"j&t|j&t express|ninja van|best express|grabexpress|ahamove|phiếu gửi hàng|vận đơn)\b",
+        re.IGNORECASE
+    )
+    has_ecom_brand = bool(ecom_pattern.search(full_text))
+
+    # 4. Check Supermarkets / Retail chains / General Retail businesses
+    supermarket_pattern = re.compile(
+        r"\b(co\.opmart|coopmart|co\.op food|winmart|winmart\+|vinmart|"
+        r"big c|go!|tops market|lotte mart|aeon|aeon mall|mega market|"
+        r"emart|circle k|7-eleven|7 eleven|familymart|gs25|ministop|"
+        r"bách hóa xanh|bach hoa xanh|guardian|watsons|con cưng|concung|"
+        r"thế giới di động|dien may xanh|fpt shop|siêu thị|khánh vy home|khánh vy|shop ly|shop mambu|"
+        r"nhà sách|fahasa|phương nam|an phước|viettel store|cellphones|hoàng hà mobile|"
+        r"hacom|gearvn|an phát|vinh nguyễn|tci|kidsplaza|bibomart|hasaki|avashop|yame|coolmate|routine|"
+        r"nhà thuốc|pharmacity|long châu|an khang|trung tâm thương mại|plaza|mall|cửa hàng bán lẻ)\b",
+        re.IGNORECASE
+    )
+    has_supermarket_brand = bool(supermarket_pattern.search(core_entity_text))
+
+    # =========================================================================
+    # MULTI-LAYER DECISION MATRIX
+    # =========================================================================
+
+    # TẦNG 1: DOANH NGHIỆP / CÔNG TY CÓ PHÁP NHÂN HOẶC MST
+    if is_confirmed_company:
+        if has_food_keywords or category_hint == "DT3":
+            return 3, "Doanh nghiệp cung ứng thực phẩm & Nông sản"
+        return 2, "Doanh nghiệp, siêu thị & Bán lẻ chung quy"
+
+    # TẦNG 2: SÀN THƯƠNG MẠI ĐIỆN TỬ & VẬN CHUYỂN BƯU CHÍNH (DT1)
+    if (has_ecom_brand or is_ecom_flag or category_hint == "DT1") and not is_confirmed_company:
         return 1, "Sàn thương mại điện tử & Dịch vụ vận chuyển"
 
-    # Category 2: Supermarkets, retail chains, convenience stores
-    if any(k in raw_text for k in CAT2_KEYWORDS):
-        return 2, "Siêu thị, chuỗi bán lẻ & Cửa hàng tiện lợi"
+    # TẦNG 3: SIÊU THỊ & DOANH NGHIỆP BÁN LẺ CHUNG QUY (DT2)
+    if has_supermarket_brand or category_hint == "DT2":
+        return 2, "Doanh nghiệp, siêu thị & Bán lẻ chung quy"
 
-    # Category 3: Food & Agricultural produce suppliers
-    if any(k in raw_text for k in CAT3_KEYWORDS):
+    # TẦNG 4: HỘ KINH DOANH NÔNG SẢN / THỰC PHẨM (DT3)
+    if has_food_keywords or category_hint == "DT3":
         return 3, "Doanh nghiệp cung ứng thực phẩm & Nông sản"
 
-    # Check if handwriting / unidentified merchant (Category 4)
-    is_handwritten = bool(data.get("is_handwritten", False))
-    if is_handwritten or not merchant_name or merchant_name in ["n/a", "không xác định", "unknown", "none", ""]:
+    # TẦNG 5: HÓA ĐƠN VIẾT TAY & KHÔNG XÁC ĐỊNH DANH TÍNH (DT4)
+    if is_handwritten_flag or not merchant_name or merchant_lower in ["n/a", "không xác định", "unknown", "none", "", "hóa đơn", "phiếu tính tiền", "phiếu thu"]:
         return 4, "Hóa đơn viết tay & Không xác định danh tính"
 
-    # Default fallback: If merchant exists but not in 1/3, categorize as Category 2 (Retail/Business)
-    return 2, "Doanh nghiệp / Cửa hàng bán lẻ"
+    # MẶC ĐỊNH: Bán lẻ / Doanh nghiệp (DT2)
+    return 2, "Doanh nghiệp, siêu thị & Bán lẻ chung quy"
 
 
 def check_vat_alert(data: Dict[str, Any]) -> Tuple[bool, float, str]:
@@ -188,35 +522,128 @@ def assemble_notes(
     existing_notes: str = "",
     tracking_no: str = "",
     vat_alert: str = "",
-    fallback_default: str = ""
+    fallback_default: str = "",
+    merchant_phone: str = "",
+    merchant_email: str = "",
+    seller_tax_id: str = "",
+    customer_name: str = "",
+    customer_phone: str = "",
+    customer_email: str = ""
 ) -> str:
     """
-    Combine all notes non-destructively:
-    - Preserves existing custom notes, duplicate warnings, and manual edits
-    - Appends tracking number if present and not yet in note
-    - Appends VAT alerts if present and not yet in note
+    Combine all notes:
+    - Appends contact info: Company phone, Person in charge Name - SĐT, MST, Mail
+    - Appends tracking number if category is DT1
+    - Appends VAT alerts
     """
     parts = []
-    e_note = str(existing_notes or "").strip()
-    if e_note:
-        parts.append(e_note)
+    
+    # 1. Loại bỏ ghi chú gốc (existing_notes) khỏi cú pháp ghép nối của hóa đơn mới
 
+    # 2. Company/Merchant Phone
+    mp = str(merchant_phone or "").strip()
+    if mp:
+        parts.append(f"SĐT Công ty: {mp}")
+
+    # 3. Person in charge (Định dạng: Tên - SĐT, không khuyết tên)
+    cname = str(customer_name or "").strip()
+    cp = str(customer_phone or "").strip()
+    if cp and cname:
+        parts.append(f"{cname} - {cp}")
+
+    # 4. Tax ID (Mã số thuế)
+    tax_id = str(seller_tax_id or "").strip()
+    if tax_id:
+        parts.append(f"MST: {tax_id}")
+
+    # 5. Email (Mail)
+    me = str(merchant_email or "").strip()
+    ce = str(customer_email or "").strip()
+    if me:
+        parts.append(f"Mail: {me}")
+    if ce and ce != me:
+        parts.append(f"Mail người nhận: {ce}")
+
+    # 6. Tracking number (Đối với DT1 ghi thêm mã vận đơn)
     tr = str(tracking_no or "").strip()
     if tr:
-        tr_label = f"Mã vận đơn: {tr}"
-        if tr not in e_note:
-            parts.append(tr_label)
+        parts.append(f"Mã vận đơn: {tr}")
 
+    # 7. VAT alert
     va = str(vat_alert or "").strip()
     if va:
         va_label = f"[VAT] {va}" if not va.startswith("[") else va
-        if va not in e_note:
-            parts.append(va_label)
+        parts.append(va_label)
 
+    # 8. Fallback default
     if not parts and fallback_default:
         parts.append(fallback_default)
 
     return " | ".join(parts).strip() if parts else ""
+
+
+def normalize_datetime_vn(date_val: Any, time_val: Any = "", prefix_quote: bool = True) -> str:
+    """
+    Standardize datetime into Vietnamese Accounting format: 'HH:MM:SS DD-MM-YYYY'.
+    Examples:
+      - '2026-08-28', '14:30:00' -> "'14:30:00 28-08-2026"
+      - '28/08/2026', '14:30'    -> "'14:30:00 28-08-2026"
+      - '2026-08-28 14:30:00'    -> "'14:30:00 28-08-2026"
+      - '2026-08-28'             -> "'00:00:00 28-08-2026"
+    """
+    if date_val is None:
+        date_val = ""
+    if time_val is None:
+        time_val = ""
+
+    raw_combined = f"{str(date_val).strip()} {str(time_val).strip()}".strip()
+    raw_combined = raw_combined.lstrip("'")
+    if not raw_combined:
+        return ""
+
+    # 1. Extract Time Component (HH:MM:SS or HH:MM)
+    time_part = "00:00:00"
+    m_time_full = re.search(r"\b(\d{1,2}):(\d{1,2}):(\d{1,2})\b", raw_combined)
+    if m_time_full:
+        hh, mi, ss = m_time_full.groups()
+        time_part = f"{int(hh):02d}:{int(mi):02d}:{int(ss):02d}"
+        # Remove matched time to avoid confusion with date
+        raw_combined = raw_combined[:m_time_full.start()] + " " + raw_combined[m_time_full.end():]
+    else:
+        m_time_short = re.search(r"\b(\d{1,2}):(\d{1,2})\b", raw_combined)
+        if m_time_short:
+            hh, mi = m_time_short.groups()
+            time_part = f"{int(hh):02d}:{int(mi):02d}:00"
+            raw_combined = raw_combined[:m_time_short.start()] + " " + raw_combined[m_time_short.end():]
+
+    # 2. Extract Date Component (YYYY-MM-DD or DD-MM-YYYY)
+    date_part = ""
+    # Check YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+    m_ymd = re.search(r"\b(\d{4})[-/\.](\d{1,2})[-/\.](\d{1,2})\b", raw_combined)
+    if m_ymd:
+        yyyy, mm, dd = m_ymd.groups()
+        date_part = f"{int(dd):02d}-{int(mm):02d}-{yyyy}"
+    else:
+        # Check DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+        m_dmy = re.search(r"\b(\d{1,2})[-/\.](\d{1,2})[-/\.](\d{4})\b", raw_combined)
+        if m_dmy:
+            dd, mm, yyyy = m_dmy.groups()
+            date_part = f"{int(dd):02d}-{int(mm):02d}-{yyyy}"
+        else:
+            # Check 8-digit compact YYYYMMDD
+            m_comp = re.search(r"\b(20\d{2})(\d{2})(\d{2})\b", raw_combined)
+            if m_comp:
+                yyyy, mm, dd = m_comp.groups()
+                date_part = f"{int(dd):02d}-{int(mm):02d}-{yyyy}"
+            else:
+                # Fallback: keep leftover text as date_part
+                date_part = raw_combined.strip()
+
+    if not date_part:
+        return ""
+
+    res = f"{time_part} {date_part}".strip()
+    return f"'{res}" if prefix_quote else res
 
 
 def format_receipt_to_sheet_rows(
@@ -231,7 +658,7 @@ def format_receipt_to_sheet_rows(
 
     date_str = str(data.get("transaction_date") or data.get("date") or "").strip()
     time_str = str(data.get("transaction_time") or data.get("time") or "").strip()
-    full_datetime = f"'{date_str} {time_str}".strip() if (date_str or time_str) else ""
+    full_datetime = normalize_datetime_vn(date_str, time_str, prefix_quote=True)
 
     merchant_name = str(data.get("merchant_name") or data.get("seller_name") or data.get("company_name") or "").strip()
     merchant_addr = str(data.get("merchant_address") or data.get("seller_address") or "").strip()
@@ -333,7 +760,7 @@ def format_receipt_to_sheet_rows(
         rows.append(row)
 
     # =========================================================================
-    # ĐỐI TƯỢNG 2: Siêu thị, cửa hàng bán lẻ, cửa hàng tiện lợi
+    # ĐỐI TƯỢNG 2: Doanh nghiệp, siêu thị & Bán lẻ chung quy
     # =========================================================================
     elif category_id == 2:
         cat_note = assemble_notes(
@@ -505,3 +932,398 @@ def format_receipt_to_sheet_rows(
         "vat_alert": vat_alert
     }
     return rows, meta
+
+
+def format_receipt_to_relational_v2(
+    data: Dict[str, Any],
+    category_id: int,
+    current_index: int = 1,
+    drive_link: str = ""
+) -> Tuple[List[Any], List[List[Any]], Dict[str, Any]]:
+    """
+    Format extracted receipt JSON into pure 2-sheet relational structure:
+    - header_row: 14 columns for Data_Header_V2 (A→N)
+    - line_rows: N rows of 14 columns for Data_Lines_V2 (A→N; M "Nhóm hàng", N "Nguồn phân loại")
+    """
+    dt_code = f"DT{category_id}{current_index:04d}"
+
+    date_str = str(data.get("transaction_date") or data.get("date") or "").strip()
+    time_str = str(data.get("transaction_time") or data.get("time") or "").strip()
+    full_datetime = normalize_datetime_vn(date_str, time_str, prefix_quote=True)
+
+    merchant_name = str(data.get("merchant_name") or data.get("seller_name") or data.get("company_name") or "").strip()
+    merchant_addr = str(data.get("merchant_address") or data.get("seller_address") or "").strip()
+    customer_name = str(data.get("customer_name") or data.get("buyer_name") or "").strip()
+    customer_addr = str(data.get("customer_address") or "").strip()
+    doc_code = str(data.get("invoice_number") or data.get("receipt_number") or data.get("tracking_number") or "")
+    order_id = str(data.get("order_id") or "")
+    primary_code = order_id if order_id else doc_code
+    if primary_code and primary_code.startswith("0") and len(primary_code) > 1:
+        primary_code = f"'{primary_code}"
+
+    has_vat, vat_amount, vat_alert = check_vat_alert(data)
+    invoice_tax_rate = float(data.get("tax_rate") or data.get("vat_rate") or 0)
+    invoice_tax_amount = float(data.get("tax_amount") or data.get("vat_amount") or 0)
+    is_price_inclusive = bool(data.get("is_price_inclusive_of_vat", False))
+    invoice_subtotal = float(data.get("subtotal_amount") or data.get("subtotal") or 0)
+    bill_discount = float(data.get("discount_amount") or data.get("discount") or 0)
+
+    line_items = data.get("line_items") or []
+
+    # Filter Category 3 removal tag
+    if category_id == 3:
+        filtered_items = []
+        for it in line_items:
+            iname = str(it.get("item_name") or "").lower()
+            if REMOVAL_TAG in iname or "(loai bo)" in iname:
+                continue
+            filtered_items.append(it)
+        line_items = filtered_items
+
+    # Format Category 1 Merchant Name
+    if category_id == 1:
+        base_platform = ""
+        m_lower = merchant_name.lower()
+        if "shopee" in m_lower or "spx" in m_lower:
+            base_platform = "Shopee"
+        elif "lazada" in m_lower or "lex" in m_lower:
+            base_platform = "Lazada"
+        elif "tiktok" in m_lower:
+            base_platform = "TikTok Shop"
+        elif "tiki" in m_lower:
+            base_platform = "Tiki"
+        elif "ghtk" in m_lower or "tiết kiệm" in m_lower:
+            base_platform = "Giao Hàng Tiết Kiệm"
+        elif "ghn" in m_lower or "nhanh" in m_lower:
+            base_platform = "Giao Hàng Nhanh"
+        elif "viettel" in m_lower:
+            base_platform = "Viettel Post"
+        elif "j&t" in m_lower:
+            base_platform = "J&T Express"
+
+        shop_name = merchant_name
+        remove_words = ["shopee", "spx", "express", "cb", "lazada", "lex", "tiktok shop", "tiktok", "tiki", "ghtk", "ghn", "viettel post", "viettel", "j&t", "giao hàng nhanh", "giao hàng tiết kiệm", "logistics", "delivery"]
+        for w in remove_words:
+            shop_name = re.sub(r'(?i)\b' + re.escape(w) + r'\b', '', shop_name)
+        shop_name = re.sub(r'^[\s\-_,]+|[\s\-_,]+$', '', shop_name)
+        shop_name = " ".join(shop_name.split()).strip()
+
+        if base_platform:
+            merchant_name = f"{base_platform} - {shop_name}" if shop_name else base_platform
+
+    line_rows: List[List[Any]] = []
+    computed_raw_total = 0.0
+    computed_discount_total = bill_discount
+    computed_vat_total = 0.0
+
+    def _clean_num(val):
+        if val is None or val == "":
+            return 0
+        try:
+            vf = float(val)
+            return int(vf) if vf.is_integer() else round(vf, 2)
+        except (ValueError, TypeError):
+            return 0
+
+    if category_id == 1:
+        # === ĐỐI TƯỢNG 1 (Sàn TMĐT & Vận chuyển): Luôn ghi nhận DUY NHẤT 1 DÒNG tổng hợp trên Data_Lines_V2 ===
+        items_summary_list = []
+        total_qty = 0
+        if line_items:
+            for it in line_items:
+                iname = str(it.get("item_name") or "").strip()
+                try:
+                    iq = float(it.get("item_quantity") or 1)
+                except Exception:
+                    iq = 1.0
+                total_qty += iq
+                items_summary_list.append(f"- {iname} (SL: {int(iq) if isinstance(iq, float) and iq.is_integer() else iq})")
+        
+        item_names_str = "\n".join(items_summary_list) if items_summary_list else "Đơn hàng TMĐT"
+
+        tot_val = float(data.get("total_amount") or 0)
+        raw_val = invoice_subtotal if invoice_subtotal > 0 else tot_val
+        vat_val = invoice_tax_amount if invoice_tax_amount > 0 else (vat_amount if has_vat else 0)
+        final_val = tot_val if tot_val > 0 else (raw_val - bill_discount + vat_val)
+
+        computed_raw_total = raw_val
+        computed_discount_total = bill_discount
+        computed_vat_total = vat_val
+
+        dt1_line = [
+            dt_code,                                        # Cột A: Mã đối tượng
+            "",                                             # Cột B: Mã sản phẩm
+            item_names_str,                                 # Cột C: Tên hàng hóa, dịch vụ
+            _clean_num(total_qty if total_qty > 0 else 1),  # Cột D: Số lượng
+            "Đơn",                                          # Cột E: Đơn vị tính
+            _clean_num(raw_val),                            # Cột F: Đơn giá (chưa VAT) - Số thuần
+            _clean_num(bill_discount),                      # Cột G: Chiết khấu mặt hàng - Số thuần
+            0,                                              # Cột H: Tỷ lệ CK (%) - Số thuần
+            0,                                              # Cột I: Thuế suất VAT (%) - Số thuần
+            _clean_num(vat_val),                            # Cột J: Tiền thuế VAT - Số thuần
+            _clean_num(final_val),                          # Cột K: Thành tiền - Số thuần
+            ""                                              # Cột L: Ghi chú mặt hàng
+        ]
+        line_rows.append(dt1_line)
+
+    elif line_items:
+        for it in line_items:
+            p_code = str(it.get("product_code") or it.get("sku") or it.get("barcode") or "").strip()
+            iname = str(it.get("item_name") or "").strip()
+            try:
+                iqty = float(it.get("item_quantity") or 1)
+            except (ValueError, TypeError):
+                iqty = 1.0
+
+            u_price, v_rate, v_amt, l_total = compute_item_vat_and_pricing(
+                it, invoice_tax_rate, invoice_tax_amount, is_price_inclusive, invoice_subtotal
+            )
+
+            # Item discount & Discount rate normalization
+            it_disc = float(it.get("discount_amount") or it.get("discount") or 0)
+            it_disc_rate = float(it.get("discount_rate") or 0)
+            
+            if it_disc_rate > 100.0:
+                it_disc_rate = round(it_disc_rate / 100.0, 2)
+            elif 0 < it_disc_rate <= 1.0:
+                it_disc_rate = round(it_disc_rate * 100.0, 2)
+
+            # Smart logic to distinguish if it_disc is a unit discount or line discount:
+            if it_disc > 0 and u_price > 0 and iqty > 1:
+                actual_line_total = it.get("total_price") or it.get("total")
+                try:
+                    t_val = float(actual_line_total) if actual_line_total is not None else 0.0
+                except (ValueError, TypeError):
+                    t_val = 0.0
+
+                if t_val > 0:
+                    # Case A: If D is unit discount, total = (U - D) * Q
+                    # Case B: If D is line discount, total = U * Q - D
+                    tot_a = (u_price - it_disc) * iqty
+                    tot_b = (u_price * iqty) - it_disc
+                    if abs(t_val - tot_a) < abs(t_val - tot_b):
+                        # D is unit discount, convert it_disc to total line discount
+                        it_disc = round(it_disc * iqty, 2)
+                else:
+                    if it_disc_rate > 0:
+                        # Rate based on unit discount: (D / U) * 100
+                        rate_unit = (it_disc / u_price) * 100.0
+                        # Rate based on line discount: (D / (U * Q)) * 100
+                        rate_line = (it_disc / (u_price * iqty)) * 100.0
+                        if abs(it_disc_rate - rate_unit) < abs(it_disc_rate - rate_line):
+                            # D is unit discount, convert it_disc to total line discount
+                            it_disc = round(it_disc * iqty, 2)
+
+            # Recalculate normalized values
+            if it_disc == 0 and it_disc_rate > 0 and u_price > 0:
+                it_disc = round(iqty * u_price * (it_disc_rate / 100.0), 2)
+            elif it_disc > 0 and (iqty * u_price) > 0:
+                it_disc_rate = round((it_disc / (iqty * u_price)) * 100.0, 2)
+
+            raw_line_val = round(iqty * u_price, 2)
+            net_before_vat = max(0.0, raw_line_val - it_disc)
+
+            # Re-verify VAT amount if discount applied and vat_amount was not hardcoded in item
+            if it.get("vat_amount") is None and it.get("tax_amount") is None:
+                # Parse numeric rate
+                try:
+                    num_r = float(str(v_rate).replace("%", "").strip()) / 100.0 if v_rate and v_rate != "0%" else 0.0
+                except (ValueError, TypeError):
+                    num_r = 0.0
+                if num_r > 0:
+                    v_amt = round(net_before_vat * num_r, 2)
+
+            final_line_val = round(net_before_vat + float(v_amt or 0), 2)
+
+            computed_raw_total += raw_line_val
+            computed_discount_total += it_disc
+            computed_vat_total += float(v_amt or 0)
+
+            # Clean numeric values
+            vat_num = int(round(float(str(v_rate).replace("%", "").strip()))) if v_rate and v_rate != "0%" else 0
+            disc_rate_num = int(it_disc_rate) if it_disc_rate.is_integer() else round(it_disc_rate, 2)
+
+            def _clean_num(val):
+                if val is None or val == "":
+                    return 0
+                try:
+                    vf = float(val)
+                    return int(vf) if vf.is_integer() else round(vf, 2)
+                except (ValueError, TypeError):
+                    return 0
+
+            m_unit = str(it.get("measurement_unit") or "").strip()
+
+            line_row = [
+                dt_code,                                    # Cột A: Mã đối tượng
+                p_code,                                     # Cột B: Mã sản phẩm
+                iname,                                      # Cột C: Tên hàng hóa, dịch vụ
+                _clean_num(iqty),                           # Cột D: Số lượng
+                m_unit,                                     # Cột E: Đơn vị tính
+                _clean_num(u_price),                        # Cột F: Đơn giá (chưa VAT) - Số thuần
+                _clean_num(it_disc),                        # Cột G: Chiết khấu mặt hàng - Số thuần
+                disc_rate_num,                              # Cột H: Tỷ lệ CK (%) - Số thuần
+                vat_num,                                    # Cột I: Thuế suất VAT (%) - Số thuần
+                _clean_num(v_amt),                          # Cột J: Tiền thuế VAT - Số thuần
+                _clean_num(final_line_val),                 # Cột K: Thành tiền - Số thuần
+                str(it.get("notes") or "")                  # Cột L: Ghi chú mặt hàng
+            ]
+            line_rows.append(line_row)
+
+    # === Tự động trích xuất chi phí vận chuyển từ notes nếu chưa có trong line_items (áp dụng cho DT2, DT3, DT4) ===
+    notes_raw = str(data.get("notes") or "").strip()
+    if notes_raw and category_id != 1:
+        shipping_keywords = ["phí vận chuyển", "phí ship", "cước vận chuyển", "shipping fee", "freight", "delivery fee", "phí giao hàng", "chi phí vận chuyển"]
+        already_has_shipping = any(
+            any(kw in str(it.get("item_name") or "").lower() for kw in shipping_keywords)
+            for it in (data.get("line_items") or [])
+        )
+        if not already_has_shipping:
+            ship_match = re.search(
+                r"(?:ph[ií]\s*(?:v[aậ]n\s*chuy[eể]n|ship|giao\s*h[àa]ng)|c[uướ][oở]c\s*v[aậ]n\s*chuy[eể]n|chi\s*ph[ií]\s*v[aậ]n\s*chuy[eể]n|shipping\s*fee|freight|delivery\s*fee)[^\d]*(\d[\d\.,]*)(?:\s*(?:vnd|vn[đd]|đ|d))?",
+                notes_raw,
+                re.IGNORECASE
+            )
+            if ship_match:
+                raw_num_str = ship_match.group(1).replace(".", "").replace(",", ".").strip()
+                try:
+                    ship_fee = float(raw_num_str)
+                    if ship_fee > 0:
+                        def _clean_ship(val):
+                            try:
+                                vf = float(val)
+                                return int(vf) if vf.is_integer() else round(vf, 2)
+                            except Exception:
+                                return 0
+
+                        shipping_line = [
+                            dt_code,                    # Cột A: Mã đối tượng
+                            "",                         # Cột B: Mã sản phẩm
+                            "Phí vận chuyển",           # Cột C: Tên hàng hóa, dịch vụ
+                            1,                          # Cột D: Số lượng
+                            "Lần",                      # Cột E: Đơn vị tính
+                            _clean_ship(ship_fee),      # Cột F: Đơn giá
+                            0,                          # Cột G: Chiết khấu
+                            0,                          # Cột H: Tỷ lệ CK (%)
+                            0,                          # Cột I: Thuế suất VAT (%)
+                            0,                          # Cột J: Tiền thuế VAT
+                            _clean_ship(ship_fee),      # Cột K: Thành tiền
+                            ""                          # Cột L: Ghi chú mặt hàng
+                        ]
+                        line_rows.append(shipping_line)
+                        computed_raw_total += ship_fee
+                except (ValueError, TypeError):
+                    pass
+
+    if not line_rows:
+        # Fallback if no items extracted
+        tot_val = float(data.get("total_amount") or 0)
+        raw_val = invoice_subtotal if invoice_subtotal > 0 else tot_val
+        vat_val = invoice_tax_amount if invoice_tax_amount > 0 else (vat_amount if has_vat else 0)
+        final_val = tot_val if tot_val > 0 else (raw_val - bill_discount + vat_val)
+
+        computed_raw_total = raw_val
+        computed_vat_total = vat_val
+
+        default_iname = "Đơn hàng TMĐT" if category_id == 1 else ("Cung ứng thực phẩm" if category_id == 3 else "Hóa đơn mua hàng")
+        vat_fallback_rate = int(invoice_tax_rate * 100) if invoice_tax_rate > 0 else 0
+        def _clean_num(val):
+            if val is None or val == "":
+                return 0
+            try:
+                vf = float(val)
+                return int(vf) if vf.is_integer() else round(vf, 2)
+            except (ValueError, TypeError):
+                return 0
+
+        line_row = [
+            dt_code,
+            "",
+            default_iname,
+            1,
+            "",                                         # Cột E: Đơn vị tính
+            _clean_num(raw_val),                        # Cột F: Đơn giá
+            _clean_num(bill_discount),                  # Cột G: Chiết khấu mặt hàng
+            0,                                          # Cột H: Tỷ lệ CK (%)
+            vat_fallback_rate,                          # Cột I: Thuế suất VAT (%)
+            _clean_num(vat_val),                        # Cột J: Tiền thuế VAT
+            _clean_num(final_val),                      # Cột K: Thành tiền
+            ""                                          # Cột L: Ghi chú mặt hàng
+        ]
+        line_rows.append(line_row)
+
+    # === Phân loại loại-hàng ở cấp DÒNG: append Cột M "Nhóm hàng" + Cột N "Nguồn phân loại" ===
+    # Áp cho MỌI nhánh (DT1 dòng gộp, DT2/3/4 chi tiết, dòng phí ship auto, fallback).
+    # Chỉ THÊM 2 phần tử cuối mỗi row — không đụng index A→L.
+    _is_dt1 = (category_id == 1)
+    for lr in line_rows:
+        iname = lr[2] if len(lr) > 2 else ""
+        iunit = lr[4] if len(lr) > 4 else ""
+        g_code, g_src = classify_line_item(iname, iunit, is_dt1=_is_dt1)
+        lr.append(g_code)   # Cột M: Nhóm hàng
+        lr.append(g_src)    # Cột N: Nguồn phân loại
+
+    # Header calculations
+    final_header_vat = invoice_tax_amount if invoice_tax_amount > 0 else (computed_vat_total if computed_vat_total > 0 else (vat_amount if has_vat else 0))
+    final_header_raw = invoice_subtotal if invoice_subtotal > 0 else (computed_raw_total if computed_raw_total > 0 else float(data.get("total_amount") or 0))
+    final_header_discount = computed_discount_total
+    
+    declared_total = data.get("total_amount")
+    if declared_total is not None and float(declared_total) > 0:
+        final_header_payment = float(declared_total)
+    else:
+        final_header_payment = round(final_header_raw - final_header_discount + final_header_vat, 2)
+
+    def _clean_num(val):
+        if val is None or val == "":
+            return 0
+        try:
+            vf = float(val)
+            return int(vf) if vf.is_integer() else round(vf, 2)
+        except (ValueError, TypeError):
+            return 0
+
+    tracking_no = str(data.get("tracking_number") or "").strip()
+    header_notes = assemble_notes(
+        existing_notes=data.get("notes"),
+        tracking_no=tracking_no if category_id == 1 else "",
+        vat_alert=vat_alert if has_vat else "",
+        fallback_default="Hóa đơn viết tay" if category_id == 4 else "",
+        merchant_phone=data.get("merchant_phone", ""),
+        merchant_email=data.get("merchant_email", ""),
+        seller_tax_id=data.get("seller_tax_id", ""),
+        customer_name=data.get("customer_name", ""),
+        customer_phone=data.get("customer_phone", ""),
+        customer_email=data.get("customer_email", "")
+    )
+
+    header_row = [
+        dt_code,                                                # Cột A: Mã đối tượng
+        full_datetime,                                          # Cột B: Ngày, tháng, năm
+        merchant_name,                                          # Cột C: Tên công ty
+        merchant_addr,                                          # Cột D: Địa chỉ bên bán
+        customer_addr,                                          # Cột E: Địa chỉ bên nhận
+        primary_code,                                           # Cột F: Mã hóa đơn, chứng từ
+        _clean_num(final_header_raw),                           # Cột G: Tổng tiền hàng (gốc) - Số thuần
+        _clean_num(final_header_discount),                      # Cột H: Chiết khấu thương mại - Số thuần
+        _clean_num(final_header_vat),                           # Cột I: Thuế VAT - Số thuần
+        _clean_num(final_header_payment),                       # Cột J: Tổng Thanh Toán - Số thuần
+        customer_name,                                          # Cột K: Người mua/nhận hàng
+        drive_link,                                             # Cột L: Link ảnh đối soát
+        header_notes,                                           # Cột M: Ghi chú chung
+        ""                                                      # Cột N: Xác nhận (chờ duyệt)
+    ]
+
+    meta = {
+        "category_id": category_id,
+        "dt_code": dt_code,
+        "line_count": len(line_rows),
+        "has_vat": has_vat,
+        "vat_amount": final_header_vat,
+        "vat_alert": vat_alert,
+        "total_discount": final_header_discount,
+        "total_payment": final_header_payment
+    }
+
+    return header_row, line_rows, meta
+

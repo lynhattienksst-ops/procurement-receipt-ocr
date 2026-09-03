@@ -1,0 +1,40 @@
+# Build context trimming — the runtime uses a bind mount (see docker-compose.yml),
+# so this mainly speeds up `docker build` and slims `COPY . .`.
+
+# VCS & editor
+.git/
+.github/
+.vscode/
+.idea/
+
+# OCR cache & runtime output (regenerated at runtime)
+cache/
+ket_qua/
+logs/
+*.log
+tmp/
+scratch/
+
+# Sheet-state snapshots (runtime artefacts, not source)
+ops/backups/
+
+# Python transients
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Tooling config not needed inside the image
+.claude/
+.serena/
+
+# Tests & docs (not needed to run the service)
+tests/
+docs/
+
+# Secrets never belong in an image layer
+.env
+service_account.json
+service_account.*.json

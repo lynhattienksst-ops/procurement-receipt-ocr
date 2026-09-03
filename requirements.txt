@@ -13,3 +13,6 @@ openai
 pydantic
 pytest
 httpx
+rapidfuzz
+openpyxl
+

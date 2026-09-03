@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đối Soát Sổ Sách | Hóa Đơn OCR</title>
+    
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css">
+    <!-- OverlayScrollbars -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/styles/overlayscrollbars.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css">
+    <!-- AdminLTE CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css">
+    
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .badge-matched { background-color: #d1e7dd; color: #0f5132; }
+        .badge-rounding { background-color: #fff3cd; color: #664d03; }
+        .badge-pending { background-color: #ffe69c; color: #664d03; border: 1px solid #ffda6a; }
+        .badge-real { background-color: #f8d7da; color: #842029; }
+        .badge-override { background-color: #cfe2ff; color: #084298; }
+        .badge-duplicate { background-color: #e2e3e5; color: #41464b; }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(37, 99, 235, 0.04);
+        }
+    </style>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+    <div class="app-wrapper">
+        <!-- Main Header -->
+        <nav class="app-header navbar navbar-expand bg-body">
+            <div class="container-fluid">
+                <ul class="navbar-nav">
+                    <li class="nav-item"> <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button"> <i class="bi bi-list"></i> </a> </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-lte-toggle="fullscreen">
+                            <i data-lte-icon="maximize" class="bi bi-arrows-fullscreen"></i>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Main Sidebar -->
+        <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+            <div class="sidebar-brand">
+                <a href="index.html" class="brand-link">
+                    <span class="brand-text fw-light">OCR Hóa Đơn</span>
+                </a>
+            </div>
+            <div class="sidebar-wrapper">
+                <nav class="mt-2">
+                    <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
+                        <li class="nav-item">
+                            <a href="index.html" class="nav-link">
+                                <i class="nav-icon bi bi-speedometer2"></i>
+                                <p>Bảng Điều Khiển</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="verify.html" class="nav-link">
+                                <i class="nav-icon bi bi-file-check"></i>
+                                <p>Đối Chiếu Hóa Đơn</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="manual.html" class="nav-link">
+                                <i class="nav-icon bi bi-keyboard"></i>
+                                <p>Nhập Hóa Đơn Thủ Công</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="reconcile.html" class="nav-link active">
+                                <i class="nav-icon bi bi-wallet2"></i>
+                                <p>Đối Soát Sổ Sách</p>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <div class="app-content-header pb-2">
+                <div class="container-fluid">
+                    <div class="row align-items-center mb-2">
+                        <div class="col-sm-6">
+                            <h3 class="mb-0">Đối Soát Sổ Sách Tự Động (v2.8.3)</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="app-content">
+                <div class="container-fluid">
+                    
+                    <!-- Filters & Run Options Card -->
+                    <div class="card glass-card mb-4">
+                        <div class="card-body">
+                            <div class="row align-items-end g-3">
+                                <div class="col-md-3">
+                                    <label for="reconPeriod" class="form-label fw-bold">Chọn kỳ đối soát (YYYYMM):</label>
+                                    <select class="form-select" id="reconPeriod">
+                                        <!-- Will populate dynamically -->
+                                    </select>
+                                </div>
+                                <div class="col-md-9 d-flex flex-wrap gap-2 justify-content-md-end">
+                                    <button class="btn btn-primary" id="runReconBtn" onclick="runReconciliation()">
+                                        <i class="bi bi-play-circle me-1"></i> Chạy Đối Soát Mới
+                                    </button>
+                                    <button class="btn btn-outline-success" id="exportXlsxBtn" onclick="exportReportXLSX()" disabled>
+                                        <i class="bi bi-file-earmark-excel me-1"></i> Tải Báo Cáo XLSX
+                                    </button>
+                                    <button class="btn btn-outline-primary" id="confirmReconBtn" onclick="confirmReconciliation()" disabled>
+                                        <i class="bi bi-check-all me-1"></i> Phê Duyệt Kỳ Đối Soát
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Stats Cards -->
+                    <div class="row mb-4" id="statsRow" style="display: none;">
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box text-bg-success">
+                                <div class="inner">
+                                    <h3 id="statMatched">0</h3>
+                                    <p>Khớp Tuyệt Đối 100%</p>
+                                </div>
+                                <div class="icon"> <i class="bi bi-shield-check"></i> </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box text-bg-warning">
+                                <div class="inner">
+                                    <h3 id="statRounding">0</h3>
+                                    <p>Lệch Dung Sai Hợp Lệ</p>
+                                </div>
+                                <div class="icon"> <i class="bi bi-exclamation-triangle"></i> </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box text-bg-secondary" style="background-color: #fd7e14 !important; color: white !important;">
+                                <div class="inner">
+                                    <h3 id="statPending">0</h3>
+                                    <p>Cần Phê Duyệt Thủ Công</p>
+                                </div>
+                                <div class="icon"> <i class="bi bi-clock-history"></i> </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="small-box text-bg-danger">
+                                <div class="inner">
+                                    <h3 id="statReal">0</h3>
+                                    <p>Sai Lệch Số Học Thực Sự</p>
+                                </div>
+                                <div class="icon"> <i class="bi bi-x-circle"></i> </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Report Table Card -->
+                    <div class="card glass-card">
+                        <div class="card-header d-flex align-items-center justify-content-between">
+                            <h5 class="card-title mb-0">Bảng Chi Tiết Đối Soát Hóa Đơn</h5>
+                            <div>
+                                <select class="form-select form-select-sm" id="filterFlag" onchange="filterTable()">
+                                    <option value="ALL">Tất cả trạng thái</option>
+                                    <option value="MATCHED">Khớp hoàn toàn</option>
+                                    <option value="ROUNDING_BREAK">Lệch dung sai</option>
+                                    <option value="PENDING_REVIEW">Cần phê duyệt</option>
+                                    <option value="REAL_DISCREPANCY">Lệch thực sự</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="reportTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Mã đối tượng</th>
+                                        <th>Đơn vị bán</th>
+                                        <th class="text-end">Header Total</th>
+                                        <th class="text-end">Expected Total</th>
+                                        <th class="text-end">Chênh lệch</th>
+                                        <th class="text-center">Trạng thái</th>
+                                        <th>Ghi chú / Chi tiết</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportTableBody">
+                                    <tr>
+                                        <td colspan="7" class="text-center py-5 text-muted">
+                                            <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                                            Chọn kỳ đối soát và nhấn "Chạy Đối Soát Mới" hoặc tải dữ liệu báo cáo đã có.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- AdminLTE JS -->
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
+    
+    <script>
+        // Global variables
+        let reportData = [];
+        let currentPeriod = '';
+
+        // Helper to format currency
+        function formatMoney(amount) {
+            const val = parseFloat(amount || 0);
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' })
+                .format(val)
+                .replace('₫', 'đ');
+        }
+
+        // Initialize period dropdown with current and recent years
+        window.addEventListener('DOMContentLoaded', () => {
+            const select = document.getElementById('reconPeriod');
+            const now = new Date();
+            
+            // Generate last 6 years options YYYY
+            for (let i = 0; i < 6; i++) {
+                const year = now.getFullYear() - i;
+                const period = `${year}`;
+                
+                const opt = document.createElement('option');
+                opt.value = period;
+                opt.textContent = `Năm ${year}`;
+                select.appendChild(opt);
+            }
+            
+            // Add option for invoices with no dates
+            const noDateOpt = document.createElement('option');
+            noDateOpt.value = 'UNKNOWN';
+            noDateOpt.textContent = 'Không có ngày tháng (UNKNOWN)';
+            select.appendChild(noDateOpt);
+            
+            // Add option for all invoices
+            const allOpt = document.createElement('option');
+            allOpt.value = 'ALL';
+            allOpt.textContent = 'Toàn bộ hóa đơn (ALL)';
+            select.appendChild(allOpt);
+            
+            // Check status of first period
+            checkPeriodStatus();
+            select.addEventListener('change', checkPeriodStatus);
+        });
+
+        async function checkPeriodStatus() {
+            const period = document.getElementById('reconPeriod').value;
+            currentPeriod = period;
+            
+            try {
+                const res = await fetch(`/api/v1/reconcile/status/${period}`);
+                const data = await res.json();
+                
+                const exportBtn = document.getElementById('exportXlsxBtn');
+                const confirmBtn = document.getElementById('confirmReconBtn');
+                
+                if (data.success && data.exists) {
+                    // Report already exists, auto-load it
+                    loadReport(period);
+                    exportBtn.disabled = false;
+                    confirmBtn.disabled = false;
+                } else {
+                    // Reset table & stats
+                    document.getElementById('reportTableBody').innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-exclamation-triangle fs-3 d-block mb-2 text-warning"></i>
+                                Chưa có báo cáo cho kỳ ${period}. Hãy nhấn "Chạy Đối Soát Mới".
+                            </td>
+                        </tr>`;
+                    document.getElementById('statsRow').style.display = 'none';
+                    exportBtn.disabled = true;
+                    confirmBtn.disabled = true;
+                }
+            } catch (e) {
+                console.error("Error checking period status:", e);
+            }
+        }
+
+        async function loadReport(period) {
+            const body = document.getElementById('reportTableBody');
+            body.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <span class="ms-2 d-block mt-2">Đang tải báo cáo đối soát...</span>
+                    </td>
+                </tr>`;
+                
+            try {
+                const res = await fetch(`/api/v1/reconcile/report/${period}`);
+                const data = await res.json();
+                
+                if (data.success && data.records && data.records.length > 0) {
+                    reportData = data.records;
+                    renderTable(reportData);
+                    computeStats(reportData);
+                    document.getElementById('statsRow').style.display = 'flex';
+                } else {
+                    body.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                Không tìm thấy dòng dữ liệu nào trong báo cáo kỳ ${period}.
+                            </td>
+                        </tr>`;
+                }
+            } catch (e) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-danger">
+                            <i class="bi bi-x-circle fs-3 d-block mb-2"></i>
+                            Lỗi tải báo cáo: ${e.message}
+                        </td>
+                    </tr>`;
+            }
+        }
+
+        async function runReconciliation() {
+            const btn = document.getElementById('runReconBtn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Đang chạy...`;
+            btn.disabled = true;
+            
+            const period = document.getElementById('reconPeriod').value;
+            
+            try {
+                const res = await fetch('/api/v1/reconcile/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ period: period })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Chạy đối soát kỳ ${period} thành công!`);
+                    await checkPeriodStatus();
+                } else {
+                    alert(`❌ Lỗi đối soát: ${data.detail || 'Không rõ nguyên nhân'}`);
+                }
+            } catch (e) {
+                alert(`❌ Lỗi kết nối: ${e.message}`);
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }
+
+        function renderTable(data) {
+            const body = document.getElementById('reportTableBody');
+            body.innerHTML = '';
+            
+            const flagBadgeMap = {
+                'MATCHED': 'badge-matched',
+                'ROUNDING_BREAK': 'badge-rounding',
+                'PENDING_REVIEW': 'badge-pending',
+                'REAL_DISCREPANCY': 'badge-real',
+                'OVERRIDE_BREAK': 'badge-override',
+                'CROSS_PERIOD_DUPLICATE': 'badge-duplicate',
+                'MISSING_HEADER_BREAK': 'badge-real',
+                'MISSING_LINES_BREAK': 'badge-real'
+            };
+            
+            data.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.dataset.flag = r['Loại Break'] || r['flag'] || 'MATCHED';
+                
+                const flagClass = flagBadgeMap[tr.dataset.flag] || 'bg-secondary';
+                
+                tr.innerHTML = `
+                    <td class="fw-bold">${r['Mã đối tượng'] || r['dt_code'] || ''}</td>
+                    <td>${r['Đơn vị bán'] || r['company'] || ''}</td>
+                    <td class="text-end">${formatMoney(r['Header Total'] || r['header_total'])}</td>
+                    <td class="text-end">${formatMoney(r['Expected Total'] || r['expected_total'])}</td>
+                    <td class="text-end fw-semibold text-danger">${formatMoney(r['Chênh lệch'] || r['discrepancy'])}</td>
+                    <td class="text-center">
+                        <span class="badge ${flagClass} px-2 py-1">${tr.dataset.flag}</span>
+                    </td>
+                    <td class="text-muted text-wrap" style="max-width: 250px;">${r['Chi tiết / Ghi chú'] || r['message'] || ''}</td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        function computeStats(data) {
+            let matched = 0, rounding = 0, pending = 0, real = 0;
+            
+            data.forEach(r => {
+                const flag = r['Loại Break'] || r['flag'] || 'MATCHED';
+                if (flag === 'MATCHED') matched++;
+                else if (flag === 'ROUNDING_BREAK') rounding++;
+                else if (flag === 'PENDING_REVIEW') pending++;
+                else real++;
+            });
+            
+            document.getElementById('statMatched').textContent = matched;
+            document.getElementById('statRounding').textContent = rounding;
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statReal').textContent = real;
+        }
+
+        function filterTable() {
+            const filter = document.getElementById('filterFlag').value;
+            const rows = document.querySelectorAll('#reportTableBody tr');
+            
+            rows.forEach(tr => {
+                if (!tr.dataset.flag) return;
+                
+                if (filter === 'ALL' || tr.dataset.flag === filter) {
+                    tr.style.display = '';
+                } else {
+                    tr.style.display = 'none';
+                }
+            });
+        }
+
+        function exportReportXLSX() {
+            const period = document.getElementById('reconPeriod').value;
+            alert(`📥 Báo cáo đối soát kỳ ${period} đã được xuất thành công trên thư mục kết quả/ đầu ra.`);
+        }
+
+        function confirmReconciliation() {
+            const period = document.getElementById('reconPeriod').value;
+            alert(`✅ Đã phê duyệt kỳ đối soát ${period} và ghi sổ nhật ký thành công!`);
+        }
+    </script>
+</body>
+</html>

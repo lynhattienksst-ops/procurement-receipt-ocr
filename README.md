@@ -61,7 +61,7 @@ flowchart TB
 
     subgraph "Docker Stack (Cổng 8080)"
         NGINX["🌐 Nginx Web Server / Reverse Proxy\n(port :8080)"]
-        API["⚡ FastAPI Server Backend\n(port :8000 nội bộ)"]
+        API["⚡ FastAPI Server Backend\n(port :8080 nội bộ)"]
         
         subgraph "Services & Engines"
             OCR["🤖 Hybrid OCR Engine\n(Gemini ⇄ Ollama ⇄ Tesseract)"]
@@ -97,7 +97,7 @@ flowchart TB
 | Nhóm | Tên Đối Tượng | Tiêu Chí Nhận Diện | Quy Tắc Trình Bày Riêng |
 | :---: | :--- | :--- | :--- |
 | **DT1** | **Sàn TMĐT & Dịch Vụ Vận Chuyển** | Shopee, SPX, Lazada, TikTok Shop, Tiki, Grab, GHTK, GHN... | **Tổng hợp trên 1 dòng duy nhất**: Cột F để trống, tổng SL tại Cột G, toàn bộ danh sách mặt hàng và mã vận đơn ghi chú chi tiết vào Cột J/N. |
-| **DT2** | **Siêu Thị & Cửa Hàng Tiện Lợi** | Co.opmart, WinMart, Big C, Go!, Lotte, Circle K, 7-Eleven, Bách Hóa Xanh... | Tách từng mặt hàng thành 1 dòng, **giữ cùng một mã `DT2XXXX`** cho toàn bộ các dòng thuộc cùng một hóa đơn. Tự động tính tách VAT. |
+| **DT2** | **Siêu Thị & Bán Lẻ Chung Quy** | Co.opmart, WinMart, Big C, Go!, Lotte, Circle K, 7-Eleven, Bách Hóa Xanh, Điện Máy Xanh, Thế Giới Di Động, Fahasa, Long Châu, các chuỗi & cửa hàng bán lẻ nói chung... | Tách từng mặt hàng thành 1 dòng, **giữ cùng một mã `DT2XXXX`** cho toàn bộ các dòng thuộc cùng một hóa đơn. Tự động tính tách VAT. |
 | **DT3** | **Doanh Nghiệp Cung Ứng Thực Phẩm** | Nhà cung cấp thịt, cá, rau, củ, quả, nông sản tươi sống, nguyên liệu F&B... | Tương tự DT2 + **Bộ lọc bắt buộc**: Tự động loại bỏ hoàn toàn các dòng mặt hàng có gắn chữ `(loại bỏ)`. |
 | **DT4** | **Giấy Viết Tay & Không Rõ Danh Tính** | Biên lai chợ viết tay, phiếu thu không có mã số thuế hoặc không rõ pháp nhân... | Áp dụng nguyên tắc "Điền nếu có", ghi chú rõ "Hóa đơn viết tay". |
 
@@ -178,8 +178,8 @@ Mở trình duyệt truy cập:
 | `GOOGLE_DRIVE_FOLDER_ID` | `1UqoNaJ...` | ID thư mục Google Drive chứa ảnh hóa đơn đầu vào |
 | `GOOGLE_DRIVE_PROCESSED_FOLDER_ID` | `19knt4f...` | (Tùy chọn) ID thư mục lưu ảnh đã xử lý |
 | `GOOGLE_SHEET_ID` | `1RmSCS...` | ID bảng tính Google Sheets đích |
-| `GOOGLE_SHEET_NAME` | `Bang_Ke_Hoa_Don` | Tên Tab bảng kê hóa đơn |
-| `GOOGLE_SHEET_LINKS_NAME` | `Links_Hoa_Don` | Tên Tab lưu đường dẫn đối chiếu |
+| `GOOGLE_SHEET_HEADER_NAME` | `Data_Header_V2` | Tên Tab Header quan hệ V2 (1 dòng / hóa đơn) |
+| `GOOGLE_SHEET_LINES_NAME` | `Data_Lines_V2` | Tên Tab Lines quan hệ V2 (1 dòng / mặt hàng) |
 
 ---
 
@@ -199,23 +199,17 @@ Giao diện Web được chia thành 2 trang chuyên biệt:
 
 ## 🧪 Kiểm Thử (Unit Tests)
 
-Dự án đi kèm bộ kiểm thử tự động toàn diện bao quát 100% các quy tắc nghiệp vụ:
+Toàn bộ bộ kiểm thử nằm trong `tests/` và chạy dưới **pytest**:
 
 ```bash
-docker exec procurement-server python test_suite.py
+docker exec procurement-server python -m pytest -q
 ```
 
-Kết quả mong đợi:
-```text
-[*] Testing Category 1 (E-commerce / Delivery)...     -> Passed! (14 Columns, DT10001)
-[*] Testing Category 2 (Supermarket VAT calc)...       -> Passed! (2 Rows, same DT20001)
-[*] Testing Category 3 (Food Supply with filter)...    -> Passed! (Removed (loại bỏ))
-[*] Testing VAT Alert detection...                     -> Passed!
-[*] Testing Duplicate Checker...                       -> Passed! (Detected duplicate order ID)
-[*] Testing Vietnamese Spell Checker...                -> Passed!
+- `tests/test_business_rules.py` — phân loại DT1–DT4, cấu trúc 14 cột, tính VAT, lọc `(loại bỏ)`.
+- `tests/test_reconciliation.py` — động cơ đối soát (`BreakFlag`, dung sai, line auto-compute).
+- `tests/test_v2_architecture.py` — kiến trúc quan hệ V2.
 
-[🎉] ALL UNIT TESTS PASSED SUCCESSFULLY!
-```
+CI (`.github/workflows/ci.yml`) chạy cùng lệnh này (bare, Python 3.12 + Tesseract) kèm bước kiểm tra không để lọt file rác vào repo.
 
 ---
 
