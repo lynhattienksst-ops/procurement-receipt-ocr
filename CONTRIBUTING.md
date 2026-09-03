@@ -27,7 +27,7 @@ We welcome contributions of all kinds: bug reports, documentation improvements, 
 
 4. **Run Unit Tests:**
    ```bash
-   docker exec procurement-server python test_suite.py
+   docker exec procurement-server python -m pytest -q
    ```
 
 ---
@@ -35,8 +35,9 @@ We welcome contributions of all kinds: bug reports, documentation improvements, 
 ## 📋 Guidelines
 
 - **Code Style:** Follow PEP 8 for Python code.
-- **Rules Integrity:** When modifying classification or row formatting rules in `services/business_rules.py`, always ensure all 5 core tests in `test_suite.py` pass.
-- **Safety:** Never commit any live API keys, tokens, or Google Cloud Service Account JSON credentials.
+- **Rules Integrity:** When modifying classification or row formatting rules in `services/business_rules.py`, ensure `python -m pytest -q` stays green (`tests/test_business_rules.py` asserts exact column counts/positions per category).
+- **Layout:** Reusable operational tools go in `ops/scripts/`, data migrations in `ops/migrations/`; tests in `tests/`. Don't add one-off audit/fix scripts to the repo, and don't leave `.py` files at the repo root.
+- **Safety:** Never commit any live API keys, tokens, or Google Cloud Service Account JSON credentials. Don't commit anything under `cache/`, `ket_qua/`, or `ops/backups/` (all git-ignored).
 - **Pull Requests:** Describe the rationale behind the change, steps to test, and attach screenshots for UI modifications.
 
 ---

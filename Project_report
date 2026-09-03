@@ -2,9 +2,9 @@
 # Hệ Thống Tự Động Hóa Trích Xuất Hóa Đơn Mua Hàng
 **(Procurement Receipt OCR & Automation System)**
 
-**Phiên bản:** 2.0  
-**Ngày lập báo cáo:** 14/08/2026  
-**Trạng thái:** Đã triển khai và vận hành thực tế
+**Phiên bản:** 2.13.4  
+**Ngày lập báo cáo:** 29/08/2026  
+**Trạng thái:** Chống Lưu Vết Ảnh Ma & Phân Giải Link Drive Đa Tầng An Toàn v2.13.4: Triệt tiêu hoàn toàn hiện tượng race condition/ảnh ma của hóa đơn trước đó (như DT20002 đè lên DT20279) bằng mã token yêu cầu phiên độc lập, làm sạch bộ nhớ đệm khung xem tức thì khi chọn hóa đơn và nâng cấp cơ chế trích xuất link Drive đa tầng an toàn trên Google Sheets.
 
 ---
 
@@ -13,6 +13,28 @@
 1. [Giới Thiệu Dự Án](#1-giới-thiệu-dự-án)
 2. [Ý Tưởng Dự Án](#2-ý-tưởng-dự-án)
 3. [Quy Định, Nguyên Tắc & Quy Tắc](#3-quy-định-nguyên-tắc--quy-tắc)
+   - 3.1. [Cấu Trúc & Nguyên Tắc Cấp Mã Đối Tượng](#31-cấu-trúc--nguyên-tắc-cấp-mã-số-giao-dịch-mã-đối-tượng)
+   - 3.2. [Tiêu Chuẩn Phân Loại 4 Nhóm Đối Tượng Doanh Nghiệp](#32-tiêu-chuẩn-phân-loại-4-nhóm-đối-tượng-doanh-nghiệp)
+   - 3.3. [Cấu Trúc Cơ Sở Dữ Liệu Google Sheet](#33-cấu-trúc-cơ-sở-dữ-liệu-google-sheet-v22)
+   - 3.4. [Quy Tắc Trình Bày Riêng Cho Từng Nhóm Đối Tượng](#34-quy-tắc-trình-bày-riêng-cho-từng-nhóm-đối-tượng)
+   - 3.5. [Cơ Chế Chống Trùng Lặp (Duplicate Guard)](#35-cơ-chế-chống-trùng-lặp-duplicate-guard)
+   - 3.6. [Nguyên Tắc Lựa Chọn Tệp & Tinh Gọn Dự Án](#36-nguyên-tắc-lựa-chọn-tệp--tinh-gọn-dự-án)
+   - 3.7. [Nguyên Tắc Tinh Gọn Luồng Công Việc & Dữ Liệu](#37-nguyên-tắc-tinh-gọn-luồng-công-việc--dữ-liệu-dự-án)
+   - 3.8. [Quy Tắc Ghép Nối Hóa Đơn PDF Theo Tên File & Xem Trực Quan](#38-quy-tắc-ghép-nối-hóa-đơn-pdf-theo-tên-file--giao-diện-xem-trực-quan-v241)
+   - 3.9. [Quy Tắc Chuyển Đổi Phân Loại Hóa Đơn & Cấp Mã Tuần Tự Mới](#39-quy-tắc-chuyển-đổi-phân-loại-hóa-đơn--cấp-mã-tuần-tự-mới-v250)
+   - 3.10. [Kiến Trúc Tải & OCR Song Song Đồng Thời (v2.6.0)](#310-kiến-trúc-tải--ocr-song-song-đồng-thời-v260)
+   - 3.11. [Cơ Chế Nhập Số Thủ Công Đa Tầng & Dung Sai Làm Tròn Số (v2.7.0)](#311-cơ-chế-nhập-số-thủ-công-đa-tầng--dung-sai-làm-tròn-số-v270)
+   - 3.12. [Cơ Chế Đối Chiếu Sổ Sách Tự Động (v2.8.0)](#312-cơ-chế-đối-chiếu-sổ-sách-tự-động-v280)
+   - 3.13. [Cơ Chế Bảo Vệ Đa Dòng Khi Cập Nhật & Cô Lập Xác Nhận Trạng Thái (v2.9.1)](#313-cơ-chế-bảo-vệ-đa-dòng-khi-cập-nhật--cô-lập-xác-nhận-trạng-thái-v291)
+   - 3.14. [Kiến Trúc Cô Lập 100% Quan Hệ V2 & Loại Bỏ Xung Đột Bảng Phẳng (v2.10.0)](#314-kiến-trúc-cô-lập-100-quan-hệ-v2--loại-bỏ-xung-đột-bảng-phẳng-v2100)
+   - 3.15. [Kiến Trúc Nhà Máy Đa Dây Chuyền & Chốt Chặn Toán Học Tuyệt Đối (v2.11.0)](#315-kiến-trúc-nhà-máy-đa-dây-chuyền--chốt-chặn-toán-học-tuyệt-đối-v2110)
+   - 3.16. [Cơ Chế Phân Đoạn Dòng Xác Định & Cập Nhật Tọa Độ Dòng Bảo Toàn Tuyệt Đối (v2.11.1)](#316-cơ-chế-phân-đoạn-dòng-xác-định--cập-nhật-tọa-độ-dòng-bảo-toàn-tuyệt-đối-v2111)
+   - 3.17. [Trải Nghiệm Đối Soát Trực Quan & Tương Tác Bảng Kiểu Excel (v2.12.0)](#317-trải-nghiệm-đối-soát-trực-quan--tương-tác-bảng-kiểu-excel-v2120)
+   - 3.18. [Chuẩn Hóa Cấu Trúc Thời Gian Cột B & Bộ Chuẩn Hóa Lõi Đa Hình (v2.13.0)](#318-chuẩn-hóa-cấu-trúc-thời-gian-cột-b--bộ-chuẩn-hóa-lõi-đa-hình-v2130)
+   - 3.19. [Chuẩn Hóa Luồng Xóa Hóa Đơn Kiến Trúc Relational V2 (v2.13.1)](#319-chuẩn-hóa-luồng-xóa-hóa-đơn-kiến-trúc-relational-v2-v2131)
+   - 3.20. [Chốt Chặn Khóa Chính & Cơ Chế Chuyển Đổi Nhóm Đối Tượng An Toàn (v2.13.2)](#320-chốt-chặn-khóa-chính--cơ-chế-chuyển-đổi-nhóm-đối-tượng-an-toàn-v2132)
+   - 3.21. [Tách Biệt & Chuẩn Hóa Cơ Chế Xem Hóa Đơn Trực Quan (v2.13.3)](#321-tách-biệt--chuẩn-hóa-cơ-chế-xem-hóa-đơn-trực-quan-v2133)
+   - 3.22. [Chống Lưu Vết Ảnh Ma & Phân Giải Link Drive Đa Tầng An Toàn (v2.13.4)](#322-chống-lưu-vết-ảnh-ma--phân-giải-link-drive-đa-tầng-an-toàn-v2134)
 4. [Quy Trình Hoạt Động](#4-quy-trình-hoạt-động)
 5. [Kiến Trúc Kỹ Thuật](#5-kiến-trúc-kỹ-thuật)
 6. [Hướng Dẫn Sử Dụng](#6-hướng-dẫn-sử-dụng)
@@ -127,7 +149,7 @@ Trong đó:
 graph TD
     A["Ảnh Hóa Đơn / Phiếu Gửi Hàng"] --> B{"Phân Loại Tự Động Bởi AI"}
     B -->|Shopee, Lazada, SPX, GHN, GHTK...| C["Nhóm 1 – DT1: Sàn TMĐT & Vận chuyển"]
-    B -->|Co.opmart, WinMart, Big C, Circle K...| D["Nhóm 2 – DT2: Siêu thị & Bán lẻ"]
+    B -->|Co.opmart, WinMart, Điện máy, Fahasa, Long Châu, Bán lẻ...| D["Nhóm 2 – DT2: Siêu thị & Bán lẻ chung quy"]
     B -->|Công ty thực phẩm, nông sản, F&B...| E["Nhóm 3 – DT3: Cung ứng thực phẩm"]
     B -->|Viết tay, không rõ pháp nhân...| F["Nhóm 4 – DT4: Giấy viết tay"]
 ```
@@ -135,26 +157,98 @@ graph TD
 | Nhóm | Tên Đối Tượng | Dấu Hiệu Nhận Biết |
 | :---: | :--- | :--- |
 | **DT1** | Sàn TMĐT & Dịch vụ vận chuyển | Shopee, SPX Express, Lazada, TikTok Shop, Tiki, Grab, GHTK, GHN, Viettel Post, J&T Express, AhaMove... |
-| **DT2** | Siêu thị & Cửa hàng tiện lợi | Co.opmart, WinMart, Big C, Go!, Lotte Mart, Aeon, 7-Eleven, Circle K, GS25, Bách Hóa Xanh, Guardian, Con Cưng... |
+| **DT2** | Siêu thị & Bán lẻ chung quy | Co.opmart, WinMart, Big C, Go!, Lotte Mart, Aeon, 7-Eleven, Circle K, GS25, Bách Hóa Xanh, Guardian, Con Cưng, Thế Giới Di Động, FPT Shop, Điện Máy Xanh, Fahasa, Long Châu, Pharmacity, cửa hàng thời trang, gia dụng, thiết bị, chuỗi bán lẻ nói chung... |
 | **DT3** | Doanh nghiệp cung ứng thực phẩm | Nhà cung cấp thịt, cá, rau, củ, quả, nông sản tươi sống, nguyên liệu F&B... |
 | **DT4** | Giấy viết tay & Không rõ danh tính | Biên lai chợ viết tay, phiếu thu không có mã số thuế hoặc không xác định rõ người mua/bán... |
 
 ---
 
-### 3.3. Cấu Trúc 10 Cột Chuẩn Trên Google Sheet
+### 3.3. Cấu Trúc Cơ Sở Dữ Liệu Google Sheet (v2.2)
 
-| Cột | Ký Hiệu | Tên Trường | Mô Tả |
-| :---: | :---: | :--- | :--- |
-| **A** | Mục 1 | **Mã đối tượng** | Mã tự động tăng `DTnXXXX` |
-| **B** | Mục 2 | **Ngày, tháng, năm** | Thời gian phát sinh giao dịch |
-| **C** | Mục 2.1 | **Tên công ty** | Tên cửa hàng / Sàn TMĐT / Dịch vụ |
-| **D** | Mục 3 | **Địa chỉ** | Địa chỉ người bán / nơi gửi hàng |
-| **E** | Mục 4 | **Mã hóa đơn, chứng từ** | Số hóa đơn / Mã đơn hàng / Mã chứng từ |
-| **F** | Mục 5 | **Tên hàng hóa, dịch vụ** | Tên chi tiết từng mặt hàng |
-| **G** | Mục 6 | **Số lượng** | Số lượng mặt hàng hoặc tổng SL |
-| **H** | Mục 7 | **Đơn giá / Thành tiền** | Đơn giá hoặc tổng giá trị thanh toán |
-| **I** | Mục 7.1 | **Người mua/nhận hàng** | Tên người mua hàng / người nhận hàng |
-| **J** | Mục 8 | **Ghi chú** | Thông tin bổ sung, cảnh báo |
+Hệ thống hỗ trợ song song hai mô hình cấu trúc dữ liệu để phục vụ cả việc tối ưu hóa cơ sở dữ liệu và tương thích ngược với các phiên bản cũ:
+
+#### 📊 A. Cấu Trúc Flat V1 (Mô Hình Phẳng - Tương Thích Ngược)
+Áp dụng khi người dùng ghi vào tab `Bang_Ke_Hoa_Don` hoặc cấu hình sheet phẳng. Cấu trúc gồm **14 cột chuẩn** (Flat Schema) lưu toàn bộ thông tin chi tiết trên cùng một dòng:
+
+| Cột | Tên Cột Chuẩn | Mô Tả / Ý Nghĩa |
+| :---: | :--- | :--- |
+| **A** | **Mã đối tượng** | Mã tự động tăng `DTnXXXX` |
+| **B** | **Ngày, tháng, năm** | Thời gian phát sinh giao dịch |
+| **C** | **Tên công ty** | Tên cửa hàng / Sàn TMĐT / Dịch vụ |
+| **D** | **Địa chỉ bên bán** | Địa chỉ chi tiết người bán |
+| **E** | **Địa chỉ bên nhận** | Địa chỉ chi tiết người nhận hàng |
+| **F** | **Mã hóa đơn, chứng từ** | Số hóa đơn / Mã đơn hàng |
+| **G** | **Tên hàng hóa, dịch vụ** | Tên chi tiết từng mặt hàng |
+| **H** | **Số lượng** | Số lượng của mặt hàng |
+| **I** | **Đơn giá** | Đơn giá chưa thuế (format dạng `123.456,00 đ`) |
+| **J** | **% VAT** | Thuế suất VAT mặt hàng (ví dụ: `10%`, `8%`) |
+| **K** | **VAT** | Số tiền thuế VAT của mặt hàng |
+| **L** | **Thành tiền** | Thành tiền sau thuế của mặt hàng |
+| **M** | **Người mua/nhận hàng** | Tên người nhận hàng |
+| **N** | **Ghi chú** | Các cảnh báo VAT, mã vận đơn hoặc thông tin liên lạc |
+
+*(Lưu ý: Đối với DT1, toàn bộ đơn hàng được gộp trên 1 dòng duy nhất, cột G ghi tổng hợp các mặt hàng, cột H ghi số lượng 1, cột L ghi tổng tiền, cột N ghi mã vận đơn).*
+
+---
+
+#### 🗄️ B. Cấu Trúc Relational V2 (Mô Hình Quan Hệ Lõi)
+Đây là cấu trúc cơ sở dữ liệu chính thức của hệ thống v2.2. Dữ liệu được chuẩn hóa và phân tách vào **2 sheet độc lập** nhằm tránh dư thừa thông tin, liên kết chặt chẽ qua khóa **`Mã đối tượng`**.
+> [!IMPORTANT]
+> **Quy Chuẩn Định Dạng Số Học Thuần Túy (Pure Numeric Standard):**
+> - **Đơn vị tiền:** Toàn bộ các cột tiền tệ được lưu dưới dạng **Số thuần túy** (Numeric: `int`/`float`, ví dụ: `150000`, `387997`, `1250000.5`), không chứa ký tự tiền tệ (`đ`, `₫`, `VND`) hay định dạng text phân tách, giúp thuận tiện tính toán công thức `SUM`, `PIVOT` và xuất ERP.
+> - **Đơn vị tỷ suất:** Lưu dưới dạng **Số thuần túy** (Numeric, ví dụ: `8`, `10`, `6.25`, `0`), không chứa ký tự `%`.
+
+##### 1. Sheet `Data_Header_V2` (14 cột - Lưu Thông Tin Chung Hóa Đơn)
+Mỗi hóa đơn/giao dịch chỉ tương ứng với **1 dòng duy nhất** ghi nhận các metadata chung:
+
+| Cột | Tên Cột Chuẩn | Mô Tả / Ý Nghĩa & Kiểu Dữ Liệu |
+| :---: | :--- | :--- |
+| **A** | **Mã đối tượng** | Khóa chính tự động tăng `DTnXXXX` (ví dụ `DT20005`) |
+| **B** | **Ngày, tháng, năm** | Thời gian phát sinh giao dịch chuẩn hóa: `HH:MM:SS DD-MM-YYYY` (ví dụ `'14:30:00 28-08-2026'`) |
+| **C** | **Tên công ty** | Tên cửa hàng, siêu thị hoặc sàn TMĐT |
+| **D** | **Địa chỉ bên bán** | Địa chỉ chi tiết nơi bán |
+| **E** | **Địa chỉ bên nhận** | Địa chỉ nhận hàng của người mua |
+| **F** | **Mã hóa đơn, chứng từ** | Số hóa đơn, mã đơn hàng gốc |
+| **G** | **Tổng tiền hàng (gốc)** | Tổng tiền trước thuế của cả hóa đơn (**Số thuần**, ví dụ `1300000`) |
+| **H** | **Chiết khấu thương mại** | Tổng tiền chiết khấu của cả hóa đơn (**Số thuần**, ví dụ `0` hoặc `5000`) |
+| **I** | **Thuế VAT** | Tổng tiền thuế VAT của cả hóa đơn (**Số thuần**, ví dụ `6000` hoặc `0`) |
+| **J** | **Tổng Thanh Toán** | Số tiền thực thanh toán của hóa đơn (**Số thuần**, ví dụ `1300000`) |
+| **K** | **Người mua/nhận hàng** | Tên người mua hoặc người nhận hàng |
+| **L** | **Link ảnh đối soát** | Đường dẫn tệp ảnh hóa đơn gốc trên Google Drive |
+| **M** | **Ghi chú chung** | Gộp thông tin SĐT, MST công ty, người phụ trách |
+| **N** | **Xác nhận** | Cột đánh dấu kiểm duyệt của Kế toán (mặc định để trống) |
+
+##### 2. Sheet `Data_Lines_V2` (14 cột - Lưu Chi Tiết Mặt Hàng)
+Lưu chi tiết từng sản phẩm trong hóa đơn. Một hóa đơn có $N$ mặt hàng sẽ ghi nhận $N$ dòng tại sheet này, cùng chung một `Mã đối tượng` của Header:
+
+| Cột | Tên Cột Chuẩn | Mô Tả / Ý Nghĩa & Kiểu Dữ Liệu |
+| :---: | :--- | :--- |
+| **A** | **Mã đối tượng** | Khóa ngoại liên kết với sheet `Data_Header_V2` |
+| **B** | **Mã sản phẩm** | Mã sản phẩm, SKU hoặc Barcode |
+| **C** | **Tên hàng hóa, dịch vụ** | Tên chi tiết từng mặt hàng |
+| **D** | **Số lượng** | Số lượng mặt hàng (**Số thuần**, ví dụ `2` hoặc `1.5`) |
+| **E** | **Đơn vị tính** | Đơn vị tính của mặt hàng (ví dụ: cái, chiếc, bộ, kg, gói, hộp...) |
+| **F** | **Đơn giá** | Đơn giá chưa thuế của sản phẩm (**Số thuần**, ví dụ `40000`) |
+| **G** | **Chiết khấu mặt hàng** | Số tiền chiết khấu riêng của mặt hàng này (**Số thuần**, ví dụ `5000` hoặc `0`) |
+| **H** | **Tỷ lệ chiết khấu (%)** | Tỷ lệ chiết khấu riêng của sản phẩm (**Số thuần**, ví dụ `10` hoặc `6.25`, không chứa `%`) |
+| **I** | **Thuế suất VAT (%)** | Thuế suất VAT của sản phẩm (**Số thuần**, ví dụ `8` hoặc `10`, không chứa `%`) |
+| **J** | **Tiền thuế VAT** | Số tiền thuế VAT của riêng mặt hàng này (**Số thuần**, ví dụ `6000` hoặc `0`) |
+| **K** | **Thành tiền** | Thành tiền sau thuế và chiết khấu của mặt hàng (**Số thuần**, ví dụ `81000`) |
+| **L** | **Ghi chú mặt hàng** | Ghi chú cụ thể cho mặt hàng này |
+| **M** | **Nhóm hàng** | Mã nhóm loại-hàng theo trục kế toán chi phí: `NL_TP` / `HH_BAN` / `CCDC_TS` / `DV_VC` / `DV_SAN` / `DV_KHAC` / `VP_PHAM` / `KHAC` / `CAN_SOAT`. Do `classify_line_item(tên, ĐVT, is_dt1)` gán ở mọi đường ghi. **DT1 (dòng gộp cả đơn) chỉ nhận 3 giá trị**: `DV_SAN` / `DV_VC` (theo từ khóa) hoặc `HH_BAN` (mặc định — tiền hàng hóa mua vào). Xem ADR `docs/decisions/*-line-item-grouping.md` |
+| **N** | **Nguồn phân loại** | Nguồn của giá trị Cột M: `manual` (người sửa tay) / `rule:keyword` (khớp từ khóa) / `rule:category` (dòng gộp DT1 → mặc định `HH_BAN`) / `unit_hint` (đoán theo ĐVT) / `auto_default` (không khớp → `KHAC`) / `low_conf` (tên rỗng nghĩa → `CAN_SOAT`) |
+
+> **Ghi chú (ADR line-item-grouping):** Cột M/N là trục phân loại thứ 5 (loại-hàng ở
+> *cấp dòng*), thêm sau khi gỡ bảng phẳng V1. KHÔNG đổi `DTnXXXX`, KHÔNG đổi DT1–DT4,
+> KHÔNG ảnh hưởng đối soát (Header vs Lines chỉ chạm A→K). Dữ liệu cũ được nạp một lần
+> bằng `ops/scripts/backfill_line_groups.py` (ghi đúng dải `M2:N{N}`, có Exact Row Guard).
+>
+> **Ghi chú (chuẩn hóa số kế toán, 2026-09-03):** `ops/scripts/format_accounting_numbers.py`
+> ép cột số Header (G–J) + Lines (D, F, G, J, K) + % Lines (H, I) về **số thuần**
+> (`round(x, 2)`), bỏ chuỗi kiểu VN (`"387.997"`, `"1,00"`, `"0,"`) để `=SUM()`/pivot
+> chạy đúng. Number format kế toán VN: tiền `#,##0;(#,##0)` (âm trong ngoặc), % `0.##`,
+> số lượng `#,##0.##`. Ghi bằng targeted range update (KHÔNG `clear`), Exact Row Guard,
+> `--dry-run`. Backup trước khi chạy: `ops/backups/20260902_194146_*`.
 
 ---
 
@@ -187,8 +281,8 @@ Mặt hàng:
 - [Tặng 1 trái] Chà là sấy dẻo (SL: 1)
 ```
 
-#### 🔵 Đối Tượng 2 (DT2) — Siêu Thị & Cửa Hàng Bán Lẻ
-- Điền đầy đủ 10 cột, mỗi mặt hàng = 1 dòng trên Google Sheet.
+#### 🔵 Đối Tượng 2 (DT2) — Siêu Thị & Bán Lẻ Chung Quy
+- Điền đầy đủ 10 cột, mỗi mặt hàng = 1 dòng trên Google Sheet. Áp dụng cho mọi hình thức bán lẻ (siêu thị, trung tâm thương mại, cửa hàng tiện lợi, điện máy, công nghệ, thời trang, nhà sách, gia dụng, dược phẩm bán lẻ, chuỗi cửa hàng bán lẻ nói chung).
 - Cột I: Điền tên người mua hàng (nếu hóa đơn có ghi nhận).
 - **Cảnh báo VAT**: Nếu hóa đơn có thuế GTGT $> 0$, hệ thống tự động gắn cờ cảnh báo vàng để người dùng kiểm tra thủ công.
 
@@ -231,7 +325,330 @@ flowchart TD
 
 ---
 
+### 3.6. Nguyên Tắc Lựa Chọn Tệp & Tinh Gọn Dự Án
+
+Nhằm giữ cho kho mã nguồn luôn trong trạng thái tinh gọn, chuyên nghiệp và sẵn sàng triển khai, dự án áp dụng chuẩn **5 Tiêu Chí Quản Lý File**:
+
+1. **Bảo toàn Toàn vẹn Vận hành (Operational Integrity)**: Tuyệt đối không xóa/di dời các tệp runtime (`server.py`, `services/*`, `frontend/*`, `Dockerfile`, `docker-compose.yml`, `nginx.conf`).
+2. **Bảo toàn Cấu hình & Khóa Bảo mật**: Giữ nguyên các tệp `.env`, `service_account.json` và tệp mẫu liên quan.
+3. **Bảo toàn Đặc tả Nghiệp vụ & Test Suite**: Giữ nguyên tài liệu đặc tả chuẩn và bộ kiểm thử tự động (`test_suite.py`, `test_v2_architecture.py`).
+4. **Loại bỏ Triệt để Rác & Tệp Nháp (Zero-Waste)**: Tự động thanh lọc các script nháp tạm thời (`scratch_*.py`), ảnh test nằm ngoài thư mục `samples/` và các thư mục rỗng.
+5. **Phân Luồng Đóng Gói Lưu Trữ (Archive Segregation)**: Toàn bộ script đối soát, audit, migrate dữ liệu lịch sử được gom gọn vào thư mục `archive/scripts/`.
+
+---
+
+### 3.7. Nguyên Tắc Tinh Gọn Luồng Công Việc & Dữ Liệu Dự Án
+
+Nhằm tối ưu hóa hiệu năng, tốc độ xử lý và cam kết **100% không ảnh hưởng đến dữ liệu đã lưu**, hệ thống tuân thủ 5 nguyên tắc luồng:
+
+1. **Bảo toàn Bất biến Dữ liệu Lịch sử (Data Immutability)**: Mọi thao tác ghi dữ liệu vào Google Sheet đều theo cơ chế **Chỉ thêm mới (Append-Only)**, không bao giờ ghi đè hoặc tự ý sửa đổi các dòng cũ.
+2. **Cấp Mã Tuyến Tính Liên Tục (Monotonic Continuity)**: Tra cứu trực tiếp chỉ số MAX hiện có tại Cột A của Google Sheet và lấy `MAX + 1` để cấp cho hóa đơn mới, không phụ thuộc bộ nhớ tạm in-memory.
+3. **Bộ Nhớ Đệm Ingest & OCR Caching**: Tái sử dụng kết quả bóc tách từ `cache/` theo Drive File ID/Hash ảnh, giúp giảm thời gian phản hồi xuống dưới 1 giây và tiết kiệm Quota Gemini.
+4. **Duplicate Guard Không Khoan Nhượng**: Trích xuất in-memory Hash Set một lần duy nhất đầu phiên quét, tự động khóa/bỏ chọn dòng trùng lặp và gắn cờ đỏ cảnh báo.
+5. **Duyệt 1 Chạm Tập Trung (Human-in-the-Loop)**: Phân luồng hiển thị ưu tiên theo trạng thái (Hợp lệ xanh - Cảnh báo vàng - Trùng lặp đỏ) trên Dashboard trước khi người dùng nhấn nút duyệt ghi Sheet.
+
+---
+
+### 3.8. Quy Tắc Ghép Nối Hóa Đơn PDF Theo Tên File & Giao Diện Xem Trực Quan (v2.4.1)
+
+Nhằm tối ưu quy trình xử lý hóa đơn hỗn hợp (gồm tệp ảnh đơn trang và tệp PDF nhiều trang), hệ thống áp dụng các quy chuẩn mới:
+
+1. **Quy Tắc Ghép Nối Theo Tên File PDF (Filename-Based PDF Merging)**:
+   - Khi tệp PDF hoặc ảnh scan được tách thành nhiều tệp/trang, **Tên File PDF gốc (`filename`) hoặc ID Tệp (`drive_file_id`)** được sử dụng làm **Khóa Mỏ Neo Ưu Tiên Hàng Đầu (`pdf_base_key`)**.
+   - Ngay cả khi các trang 2, 3... khuyết Số Hóa Đơn (`invoice_number`), tất cả các trang/tệp thuộc cùng một Tên File PDF đều được đảm bảo **gom về DUY NHẤT 01 MÃ `DTnXXXX`**.
+   - Thông tin tiêu đề (`merchant_name`, `seller_tax_id`, `invoice_number`, `transaction_date`) được kế thừa từ Trang 1, còn danh sách mặt hàng (`line_items`) của tất cả các trang được gộp nối liên tục.
+2. **Ưu Tiên Quét Hàng Đợi (JPEG/PNG Priority Queue)**:
+   - Tất cả các hóa đơn dạng tệp ảnh đơn trang (`image/jpeg`, `image/jpg`, `image/png`, `image/webp`) sẽ được tự động xếp lên đầu danh sách xử lý và quét trước.
+   - Các hóa đơn nhiều hơn 1 trang được scan dưới dạng tệp PDF (`application/pdf`) sẽ được tự động đưa về phía sau danh sách và quét lần lượt sau khi toàn bộ tệp ảnh đã xử lý xong.
+3. **Giao Diện Xem Hóa Đơn PDF Phong Cách Google Drive & Native Proxy**:
+   - Giao diện Dashboard tự động nhúng iframe proxy (`/api/v1/drive/image/{file_id}#toolbar=1`), kích hoạt trình xem PDF tương tác đa trang nguyên bản của trình duyệt (cuộn trang, phóng to, lật trang).
+4. **Quy Trình Reset Thu Hồi File PDF (`archive/scripts/reset_processed_pdfs.py` & `audit_and_reset_pdfs.py`)**:
+   - Khi có yêu cầu quét lại PDF theo quy tắc ghép nối mới, công cụ tự động xóa các dòng dữ liệu PDF cũ trên Google Sheet và chuyển các file PDF từ folder `Da_Xu_Ly` quay về `Chua_Xu_Ly` (Inbox).
+5. **Cơ Chế Sao Lưu Snapshot Dữ Liệu (Backup Safeguard)**:
+   - Trước mỗi đợt nâng cấp hoặc reset, công cụ `archive/scripts/backup_sheet_state.py` tự động lưu toàn bộ snapshot của các sheet (`Data_Header_V2`, `Data_Lines_V2`, `Bang_Ke_Hoa_Don`) dưới dạng các tệp JSON trong thư mục `archive/backups/`, cam kết bảo toàn 100% dữ liệu gốc.
+
+---
+
+### 3.9. Quy Tắc Chuyển Đổi Phân Loại Hóa Đơn & Cấp Mã Tuần Tự Mới (v2.5.0)
+
+Nhằm đáp ứng nhu cầu tái phân loại hóa đơn của kế toán ngay trên giao diện đối soát mà không gây xung đột mã dữ liệu:
+
+1. **Quy Tắc Cấp Mã Tuần Tự Động Khi Chuyển Nhóm Đối Tượng (Sequential ID Allocation)**:
+   - Khi chuyển đối tượng từ mã `DTXnnnn` sang nhóm `DTY` ($X \neq Y$, với $X, Y \in \{1, 2, 3, 4\}$):
+     - Hệ thống **tuyệt đối không giữ nguyên số đuôi cũ** để tránh nguy cơ trùng lặp với hóa đơn đã có sẵn trong nhóm `DTY`.
+     - Hệ thống tự động tra cứu mã lớn nhất hiện có trong nhóm `DTY` trên Google Sheet (ví dụ `DT23455`) và cấp mã mới kế tiếp: **`DT23456`** cho hóa đơn được chuyển đổi.
+2. **Bảo Toàn Toàn Vẹn Liên Kết Tệp Drive (Drive Link Integrity)**:
+   - Trong quá trình chuyển đổi giữa Form Phẳng (`Bang_Ke_Hoa_Don`) và Form Quan Hệ (`Data_Header_V2` / `Data_Lines_V2`), đường dẫn tệp ảnh gốc trên Google Drive (`drive_link`) được bảo toàn tuyệt đối 100%.
+   - Thao tác xóa bản ghi cũ trên Sheet khi chuyển đổi được cấu hình `delete_drive_file=False` để đảm bảo tệp ảnh trên Google Drive không bao giờ bị xóa nhầm.
+3. **Cơ Chế Phục Hồi & Fallback Link Drive Đa Tầng**:
+   - Khi đọc lịch sử từ Sheet, hệ thống quét linh hoạt toàn bộ các cột của tab `Links_Hoa_Don` để tự động phát hiện URL ảnh.
+   - Nếu bản ghi trong `Data_Header_V2` bị khuyết link, hệ thống tự động fallback tra cứu theo mã `DT_CODE` từ từ điển `Links_Hoa_Don`.
+4. **Điều Khiển Chuyển Hóa Đơn Bằng Phím Mũi Tên Bàn Phím (`←` / `→`)**:
+   - Tích hợp phím tắt bàn phím `←` (trước đó) và `→` (tiếp theo) giúp thao tác đối soát duyệt hóa đơn nhanh chóng mà không phụ thuộc chuột.
+   - Cơ chế bảo vệ khi đang gõ text trong ô input: `Alt + ←` / `Alt + →` (hoặc `Ctrl + ←` / `Ctrl + →`) cho phép chuyển hóa đơn mà không làm gián đoạn con trỏ soạn thảo.
+
+---
+
+### 3.10. Kiến Trúc Tải & OCR Song Song Đồng Thời (v2.6.0)
+
+Nhằm tối ưu hóa triệt để tốc độ xử lý khi quét các lô hóa đơn lớn đồng thời cam kết bảo toàn 100% dữ liệu gốc:
+
+1. **Tải File Song Song Có Điều Tiết (`asyncio.gather` + `Semaphore(5)`)**:
+   - Tải đồng thời tối đa 5 file ảnh/PDF từ Google Drive về bộ nhớ đệm (thay vì tải tuần tự từng file), giúp giảm thời gian chuẩn bị dữ liệu từ 45 giây xuống còn 3-5 giây cho lô 30 file.
+   - Cấu hình linh hoạt qua biến `MAX_CONCURRENT_DOWNLOADS` trong `.env`.
+2. **OCR Đa Luồng Song Song Trực Tiếp Qua Gemini (`Semaphore(3)`)**:
+   - Xử lý đồng thời tối đa 3 yêu cầu OCR qua Google Gemini API, giải quyết triệt để điểm nghẽn của các tệp PDF dài và lô hóa đơn lớn.
+   - Cấu hình qua biến `MAX_CONCURRENT_OCR` trong `.env` nhằm tối đa hóa thông lượng mà không vượt quá ngưỡng rate-limit của Gemini.
+3. **Khóa Phân Đoạn Ghi Dữ Liệu (`sheet_write_lock`)**:
+   - Tách biệt hoàn toàn luồng Đọc/OCR (chạy song song không lock) và luồng Ghi dữ liệu vào Google Sheet (chỉ lock khi Append để đảm bảo tính tuần tự của mã `DTnXXXX`).
+4. **Cam Kết Bất Biến Dữ Liệu Gốc (Data Immutability & Zero-Impact Guarantee)**:
+   - Thao tác quét thư mục Drive (`/api/v1/drive/scan`) hoàn toàn ở trạng thái **Chỉ đọc (Read-Only)** trên RAM, tuyệt đối không can thiệp hay thay đổi dữ liệu đã có trên Google Sheet.
+   - Thao tác ghi (`export_to_google_sheet`) hoạt động theo nguyên tắc **Append-Only** (chỉ nối tiếp vào dòng cuối) và đối soát trùng lặp 2 tầng trước khi ghi.
+
+---
+
+### 3.11. Cơ Chế Nhập Số Thủ Công Đa Tầng & Dung Sai Làm Tròn Số (v2.7.0)
+
+Nhằm giải quyết triệt để tình huống thực tế khi nhà cung cấp áp dụng quy tắc làm tròn số (Rounding Discrepancy) trên hóa đơn bán lẻ:
+
+1. **Mở Khóa Toàn Diện 4 Ô Số Trọng Yếu**:
+   - Toàn bộ các ô số: **Tiền VAT dòng**, **Thành Tiền dòng**, **Tổng Tiền Gốc Header** và **Tổng Thanh Toán Header** đều được mở khóa (bỏ `readonly`) cho phép người dùng click và gõ số thủ công trực tiếp.
+2. **Cơ Chế Bảo Vệ Cờ Ghi Đè Thủ Công (Manual Override Flags)**:
+   - **Mặc định:** Hệ thống hoạt động tự động 100% theo công thức toán học (`SL × Đơn Giá - CK + VAT`).
+   - **Khi có can thiệp thủ công:** Hệ thống kích hoạt các cờ `data-manual-vat`, `data-manual-total` (cấp dòng) và `dataset.manual` (cấp Header) để **tôn trọng tuyệt đối con số do người dùng nhập**, ngăn chặn hàm tự động tính toán ghi đè lại.
+   - **Cơ chế Reset tự động:** Khi người dùng thay đổi dropdown `% VAT`, hệ thống tự động giải phóng cờ thủ công để quay về chế độ tự động tính toán chuẩn xác.
+3. **Dung Sai Đối Soát Làm Tròn Số (Rounding Tolerance)**:
+   - Hàm kiểm tra đối soát toán học `checkMathDiscrepancy()` áp dụng ngưỡng dung sai làm tròn $\le 1.000$ VNĐ, giúp các hóa đơn có chênh lệch làm tròn vài chục/vài trăm đồng vẫn được xác nhận duyệt bình thường mà không bị báo lỗi sai lệch dữ liệu.
+4. **Bảo Toàn 100% Dữ Liệu Gốc Trên Google Sheet**:
+   - Mọi thao tác chỉnh sửa chỉ diễn ra trên giao diện Web (RAM). Dữ liệu chỉ được cập nhật lên Google Sheet khi người dùng chủ động nhấn nút **"Cập Nhật Lên Sheet"**.
+
+---
+
+### 3.12. Cơ Chế Đối Chiếu Sổ Sách Tự Động (v2.8.4)
+
+Nhằm bảo đảm tính chính xác nghiệp vụ kế toán theo chuẩn VAS 01 và tự động hóa quy trình hậu kiểm đối soát:
+
+1. **Kiến Trúc Tách Biệt Dữ Liệu (Separate Sheet Output)**:
+   - Quy trình đối soát chạy hoàn toàn **Chỉ Đọc (Read-Only)** trên các bảng dữ liệu gốc (`Data_Header_V2`, `Data_Lines_V2`, `Bang_Ke_Hoa_Don`).
+   - Báo cáo kết quả và nhật ký kiểm soát được xuất ra các tab chuyên dụng (`Reconciliation_Report_YYYY`, `Reconciliation_Report_UNKNOWN`, `Reconciliation_Report_ALL` và `Recon_Audit_Log`) nằm trên cùng Spreadsheet hoặc Spreadsheet riêng biệt, ngăn chặn hoàn toàn nguy cơ vô tình làm sai lệch hay làm bẩn dữ liệu gốc.
+2. **Cơ Chế Chuẩn Hóa Chu Kỳ Theo Năm (Year-Based Period Resolution)**:
+   - Hàm `parse_period()` phân tích toàn bộ ngày tháng từ hóa đơn để trích xuất ra năm tài chính dưới định dạng 4 chữ số `YYYY` (ví dụ: `2026`).
+   - Hóa đơn từ các tháng khác nhau trong cùng năm tài chính được tự động gom nhóm để chạy đối chiếu tổng hợp cả năm, giúp dễ dàng khóa sổ kỳ và quyết toán năm.
+3. **Đối Soát Toàn Bộ Cơ Sở Dữ Liệu (All-Period Database Reconciliation)**:
+   - Hệ thống cho phép chạy đối soát toàn diện cho toàn bộ các bản ghi trong cơ sở dữ liệu (`period = "ALL"`). Kết quả được ghi nhận tại tab `Reconciliation_Report_ALL`, hỗ trợ kiểm soát viên rà soát toàn bộ lịch sử hóa đơn mà không cần chọn lọc từng năm.
+4. **Cơ Chế Tự Động Phát Hiện Chiết Khấu Dòng (Line Net Discount Heuristic)**:
+   - Đối với các hóa đơn đặc thù siêu thị (MM Mega Market...), khi chiết khấu đã được trừ trực tiếp ở cấp dòng nhưng Header vẫn ghi nhận tổng chiết khấu, Reconciliation Engine tự động so sánh chênh lệch giữa công thức chuẩn và công thức không khấu trừ thêm. 
+   - Nếu công thức không khấu trừ thêm khớp tốt hơn và nằm trong ngưỡng dung sai, hệ thống tự động xác nhận số liệu khớp mà không trừ chiết khấu Header thêm lần 2, bảo vệ dữ liệu gốc khỏi bị chỉnh sửa sai lệch.
+   - **Quy tắc phân loại chiết khấu:**
+     * *Nếu chiết khấu tính theo đơn vị sản phẩm:* Hệ thống bắt buộc nhân giá trị chiết khấu đơn vị này với tổng số lượng sản phẩm ở dòng tương ứng để tính ra chiết khấu tổng của dòng.
+     * *Nếu chiết khấu tính cho tổng đơn hàng:* Hệ thống chỉ cần lấy tổng tiền gốc của toàn bộ đơn hàng trừ đi giá trị chiết khấu tổng này.
+5. **Cơ Chế Tự Động Tính Lại Số Liệu Dòng Mặt Hàng (Line Auto-Compute v2.9.0)**:
+   - Trước khi Reconciliation Engine cộng dồn `lines_total`, hàm `compute_line_figures()` tự động được gọi cho từng dòng mặt hàng để phân loại và tính lại chiết khấu, VAT và Thành tiền theo chuỗi logic ngược chiều.
+   - **Phân loại chiết khấu tự động:** Nếu `disc_raw < đơn_giá × 0.99` VÀ `SL > 1` → xác định là **CK đơn vị** và tự nhân `disc_raw × SL`. Nếu không, xác định là **CK tổng dòng** và dùng trực tiếp. Ưu tiên `disc_rate%` khi có.
+   - Mọi điều chỉnh chỉ tồn tại **in-memory** — không ghi đè dữ liệu gốc trên Google Sheet.
+6. **Cơ Chế Dựng Sai Lệch (Dual Tolerance & Vendor Fatigue)**:
+   - Hệ thống áp dụng dung sai làm tròn kỹ thuật nhất quán: Chênh lệch $\le 1.000$ VNĐ **VÀ** tỷ lệ lệch $\le 0.5\%$ của tổng giá trị hóa đơn.
+   - Khi phát hiện một nhà cung cấp có sai lệch (cho dù nhỏ nằm trong dung sai) lặp lại nhiều lần ($\ge 2$ lần), hệ thống tự động hủy trạng thái bỏ qua làm tròn và gắn cờ cảnh báo **`PENDING_REVIEW`** để chuyển cho kiểm soát viên đánh giá thủ công.
+6. **Đối Soát Đặc Thù Cho Nhóm DT1 (E-commerce / Delivery)**:
+   - Do đặc thù hóa đơn DT1 không có dòng chi tiết chiết khấu/VAT riêng biệt (khuyết Lines), hệ thống áp dụng thuật toán đối soát nội bộ trên dòng Header: `Tổng_Thanh_Toán == Tiền_Hàng - Chiết_Khấu + Thuế_VAT`.
+7. **Phân Loại 5 Cờ Trạng Thái Đối Soát (BreakFlags)**:
+   - `MATCHED`: Khớp tuyệt đối 100%.
+   - `ROUNDING_BREAK`: Lệch dung sai làm tròn hợp lệ (Cảnh báo vàng).
+   - `REAL_DISCREPANCY`: Chênh lệch số học lớn vượt ngưỡng (Cờ đỏ, khóa duyệt).
+   - `CROSS_PERIOD_DUPLICATE`: Số hóa đơn bị trùng lặp ở kỳ kế toán khác.
+   - `PENDING_REVIEW`: Lệch lặp lại nhiều lần, hoặc lệch các yếu tố cốt lõi (thuế, số chứng từ, kỳ kế toán).
+8. **Khóa Đọc/Ghi An Toàn (Granular Soft Lock)**:
+   - Để ngăn ngừa xung đột dữ liệu khi hệ thống đang ghi dữ liệu OCR, Reconciliation Engine tự động kiểm tra `sheet_write_lock` trước khi chạy. Nếu lock đang hoạt động, engine sẽ chờ tối đa 10 giây trước khi báo bận.
+
+---
+
+### 3.13. Cơ Chế Bảo Vệ Đa Dòng Khi Cập Nhật & Cô Lập Xác Nhận Trạng Thái (v2.9.1)
+
+Nhằm giải quyết triệt để sự cố nén dòng mặt hàng và loại trừ rủi ro mất dữ liệu khi cập nhật/xác nhận hóa đơn trên Google Sheet:
+
+1. **Bảo Tồn Đa Dòng Mặt Hàng (Multi-Line Item Preservation)**:
+   - Đối với các hóa đơn thuộc nhóm đa dòng (`DT2`, `DT3`, `DT4`), hàm `update_sheet_row` tự động tra cứu và bảo toàn toàn bộ danh sách dòng chi tiết hiện có trên `Data_Lines_V2` thay vì tự động nén về 1 dòng đơn.
+   - Nhóm `DT1` (Sàn TMĐT) tiếp tục duy trì quy tắc 1 dòng tổng hợp theo đúng đặc tả riêng.
+2. **Cô Lập Luồng Duyệt Trạng Thái (Atomic Status Confirmation)**:
+   - Thao tác chuyển đổi trạng thái "Duyệt Đạt" $\leftrightarrow$ "Chờ Duyệt" (`POST /api/v1/sheets/confirm`) được cô lập hoàn toàn: Chỉ cập nhật duy nhất ô Cột N (`Data_Header_V2!N...`), loại bỏ triệt để việc gọi lại hàm ghi đè mặt hàng `update_sheet_row`.
+3. **Cập Nhật Mảng An Toàn & Chốt Chặn Độ Dài (In-Memory Atomic Update & Length Guard)**:
+   - Hàm `update_relational_record` loại bỏ hoàn toàn lệnh `clear("Data_Lines_V2!A1:Z10000")` xóa trắng sheet.
+   - Hệ thống thực hiện ghi đè mảng dữ liệu mới trực tiếp (`update A1`) và chỉ dọn các dòng thừa ở đuôi nếu danh sách mới ngắn hơn danh sách cũ.
+   - Tích hợp chốt chặn an toàn: Tự động ngắt và báo lỗi nếu phát hiện số dòng bị giảm đột ngột $> 20$ dòng mà không có chủ đích xóa.
+
+---
+
+### 3.14. Kiến Trúc Cô Lập 100% Quan Hệ V2 & Loại Bỏ Xung Đột Bảng Phẳng (v2.10.0)
+
+Nhằm chấm dứt tình trạng trùng lặp dữ liệu (duplicate) cho các mã `DT10001, DT10002, DT20079, DT40067` và giải quyết dứt điểm lỗi ghi đè làm mất dữ liệu:
+
+1. **Cắt Bỏ Triệt Để Luồng Ghi Bảng Phẳng V1 (`Bang_Ke_Hoa_Don`)**:
+   - Loại bỏ hoàn toàn cơ chế ghi song song (dual export) vào tab `Bang_Ke_Hoa_Don` trong API `/api/v1/sheets/export`.
+   - Hàm cấp mã tuần tự `get_max_indexes_by_category` và đọc lịch sử `get_historical_records` chỉ đọc duy nhất bảng `Data_Header_V2`, loại bỏ các đoạn code fallback gây xung đột mã số.
+2. **Sửa Lỗi Chống Trùng Lặp 14 Cột (Duplicate Guard Fix)**:
+   - Khắc phục lỗi lệch chỉ số cột khi đọc ghi chú Cột M (Index 12) trên bảng `Data_Header_V2` (trước đây bị hiểu nhầm là Cột N 'Xác nhận').
+   - Đảm bảo toàn bộ Mã Đơn Hàng (Order ID) và Mã Vận Đơn (Tracking Number) của các sàn TMĐT (DT1) được nạp đầy đủ vào bộ lọc chống trùng ngay cả khi hóa đơn đã được đánh dấu duyệt 'x'.
+3. **Module Hóa Tuyến Tính (Silo Architecture)**:
+   - Tách bạch rõ ranh giới xử lý: Frontend $\rightarrow$ REST API $\rightarrow$ `update_relational_record` $\rightarrow$ `Data_Header_V2` + `Data_Lines_V2`.
+   - Thanh lọc 16 script vá lỗi rác tạm thời trong thư mục `archive/scripts/`, bảo đảm mã nguồn tinh gọn và không còn code dư thừa gây lãng phí tài nguyên/token.
+
+---
+
+### 3.15. Kiến Trúc Nhà Máy Đa Dây Chuyền & Chốt Chặn Toán Học Tuyệt Đối (v2.11.0)
+
+Nhằm khắc phục triệt để lỗi nút "Cập nhật lên Sheet" trên trang Đối Chiếu Hóa Đơn và cam kết **100% không mất bất kỳ dòng dữ liệu nào** trên Google Sheet online:
+
+1. **Mô Hình Nhà Máy Xử Lý Lõi Trong Chuỗi Cung Ứng (Invoice Processing Factory)**:
+   - Toàn bộ nghiệp vụ cập nhật được cô lập bên trong Nhà máy, phân luồng độc lập thành **4 Dây Chuyền Sản Xuất Con (Production Lines)** thông qua **Trạm Điều Phối Nhà Máy (`dispatch_pipeline`)**:
+     * **Dây chuyền DT1 (`process_dt1_pipeline`)**: Xử lý đơn hàng TMĐT, gộp gói COD, mã vận đơn, đồng bộ chính xác 1 dòng Header và 1 dòng Lines tóm tắt, khắc phục lỗi gán lại dòng cũ.
+     * **Dây chuyền DT2 (`process_dt2_pipeline`)**: Xử lý hóa đơn siêu thị đa dòng, kiểm soát thuế VAT, bảo toàn danh sách chi tiết mặt hàng.
+     * **Dây chuyền DT3 (`process_dt3_pipeline`)**: Xử lý thực phẩm/nông sản, tự động kích hoạt bộ lọc loại bỏ sản phẩm chứa thẻ `(loại bỏ)`.
+     * **Dây chuyền DT4 (`process_dt4_pipeline`)**: Xử lý biên lai viết tay/chợ tự do, linh hoạt theo cơ chế "điền nếu có".
+2. **Chốt Chặn Kiểm Soát Độ Dài Toán Học Tuyệt Đối (Exact Math Row Guard & Zero Data Loss)**:
+   - Áp dụng công thức kiểm tra dòng chặt chẽ trước khi ghi Sheet:
+     $$\text{Tổng số dòng mới} = \text{Tổng số dòng cũ} - \text{Số dòng cũ của DT} + \text{Số dòng mới của DT}$$
+   - Đảm bảo **bảo toàn nguyên vẹn 100% mọi dòng dữ liệu của các hóa đơn khác** trên cả 2 bảng tính `Data_Header_V2` và `Data_Lines_V2`. Nếu phát hiện sai lệch bất thường, hệ thống tự động hủy cập nhật (rollback) để bảo vệ dữ liệu.
+   - Luôn bảo tồn nguyên vẹn 100% **Cột L (Link ảnh Drive)** và **Cột N (Cờ duyệt 'x' của Kế toán)**.
+3. **Đồng Bộ Dữ Liệu Client & Trạm Điều Phối API Tức Thì**:
+   - Trạm tiếp nhận `PUT /api/v1/sheets/record` phản hồi chi tiết dữ liệu đã cập nhật.
+   - Hàm `updateHistoricalRecord()` trong `app.js` tự động reload cache và giữ nguyên vẹn 100% các giá trị mới sửa trên form sau khi cập nhật thành công.
+
+---
+
+### 3.16. Cơ Chế Phân Đoạn Dòng Xác Định & Cập Nhật Tọa Độ Dòng Bảo Toàn Tuyệt Đối (v2.11.1)
+
+Nhằm loại bỏ hoàn toàn hiện tượng xung đột chốt chặn toán học khi thêm/bớt mặt hàng và giải quyết triệt để lỗi cập nhật số liệu:
+
+1. **Cơ Chế Phân Đoạn Dòng Xác Định (Deterministic Partitioning)**:
+   - Tách biệt hoàn toàn toàn bộ dòng mặt hàng của các hóa đơn khác ($L_{\text{other}}$) và dòng mới của hóa đơn mục tiêu ($L_{\text{new}}$).
+   - Tái lập mảng bảng tính hoàn chỉnh: $L_{\text{final}} = [\text{Header}] + L_{\text{other}} + L_{\text{new}}$.
+   - Ghi đè trực tiếp $L_{\text{final}}$ và tự động dọn sạch dải ô dư thừa phía dưới.
+   - **Cam kết bảo toàn dữ liệu**: Tuyệt đối không xóa nhầm hoặc làm mất bất kỳ dòng dữ liệu nào của các hóa đơn khác trên toàn bộ hệ thống.
+2. **Cập Nhật Tọa Độ Dòng Cố Định Cho Header (Targeted Row Coordinate Update)**:
+   - Xác định chính xác vị trí chỉ số dòng của `dt_code` trên `Data_Header_V2` và chỉ cập nhật duy nhất dải ô `A{sheet_row}:N{sheet_row}`.
+   - Bảo toàn nguyên vẹn Cột L (Link ảnh Drive) và Cột N (Cờ duyệt 'x').
+3. **Chuẩn Hóa Dữ Liệu Số Học Thuần Túy (Numeric Typing Guard)**:
+   - Toàn bộ các trường tiền tệ và số lượng (`f_h_raw_amount`, `f_h_discount`, `f_h_vat`, `f_h_final_payment`, `line_price`, `line_discount`, `line_row_total`...) được chuyển đổi sang kiểu số nguyên/thực thuần túy trước khi gửi tới Google Sheets, loại bỏ lỗi hiểu nhầm định dạng chuỗi văn bản.
+
+---
+
+### 3.17. Trải Nghiệm Đối Soát Trực Quan & Tương Tác Bảng Kiểu Excel (v2.12.0)
+
+Nhằm tối ưu hóa năng suất làm việc của kế toán viên, giảm mỏi mắt khi đối chiếu hóa đơn và đem lại trải nghiệm bảng tính tương tác trực quan:
+
+1. **Khung Chia Tỉ Lệ Tùy Biến (Resizable Split Container)**:
+   - Tích hợp thanh kéo phân cách trung gian `.split-resizer` giữa khung ảnh và khung form, cho phép người dùng kéo thả chuột để điều chỉnh linh hoạt tỷ lệ khung ảnh từ **20% đến 80%** chiều rộng màn hình.
+   - Hỗ trợ khôi phục nhanh về tỷ lệ mặc định (Reset) khi double-click.
+2. **Bộ Công Cụ Tương Tác Ảnh Hóa Đơn Nổi (Floating Image Controls)**:
+   - **Phóng to / Thu nhỏ (Zoom In / Zoom Out)**: Hỗ trợ tỷ lệ từ 30% đến 400% kèm nhãn phần trăm hiển thị trực tiếp.
+   - **Xoay ảnh 90° (Rotate)**: Khắc phục các hóa đơn bị chụp ngang/ngược.
+   - **Khớp chiều ngang (Fit Width)**: Phóng to tự động vừa vặn khung xem.
+   - **Toàn màn hình (Fullscreen Toggle)**: Mở ảnh tràn toàn bộ màn hình để soi chi tiết từng con số.
+   - **Pan & Drag + Mouse Wheel**: Cho phép kéo rê di chuyển ảnh khi đang zoom và lăn chuột để zoom nhanh.
+3. **Thanh Cuộn Ngang & Tính Năng Co Giãn Kích Thước Cột Như Excel (Excel Column Resizer)**:
+   - Bảng `#linesTable` và `#manualLinesTable` được mở rộng không gian (`min-width: 1400px`) với thanh cuộn ngang chuyên dụng `.table-responsive-custom`, loại bỏ hoàn toàn hiện tượng ép dồn ô, cắt chữ.
+   - Gắn tay cầm kéo dãn `.col-resizer` vào từng cột tiêu đề `<th>`, cho phép kế toán viên kéo thả đường biên để thay đổi độ rộng từng cột như trong Microsoft Excel hay Google Sheets.
+4. **Cam Kết Toàn Vẹn Hệ Thống**:
+   - Toàn bộ tính năng UI/UX hoạt động độc lập bằng Vanilla JS/CSS (không phụ thuộc thư viện CDN bên ngoài).
+   - Bảo toàn 100% logic tính toán tự động, cờ thủ công (`data-manual-vat`, `data-manual-total`) và cấu trúc API cập nhật Sheet.
+
+---
+
+### 3.18. Chuẩn Hóa Cấu Trúc Thời Gian Cột B & Bộ Chuẩn Hóa Lõi Đa Hình (v2.13.0)
+
+Nhằm đáp ứng yêu cầu biểu diễn thời gian nghiệp vụ kế toán Việt Nam, đảm bảo tính thống nhất giữa tất cả các nguồn dữ liệu và tương thích toàn diện với Động cơ Đối Soát Sổ Sách:
+
+1. **Chuẩn Hóa Cấu Trúc Thời Gian Cột B (`Data_Header_V2!B`)**:
+   - Chuyển đổi toàn bộ cấu trúc thời gian Cột B từ định dạng cũ `YYYY-MM-DD HH:MM:SS` sang cấu trúc kế toán Việt Nam thống nhất:
+     $$\text{Chuỗi chuẩn: } \text{`'HH:MM:SS DD-MM-YYYY'`} \quad \text{(ví dụ: `'14:30:00 28-08-2026'`)}$$
+   - Quy tắc mặc định: Trường hợp hóa đơn không có thông tin giờ (`time_str` khuyết), hệ thống tự động điền `00:00:00` (ví dụ: `'00:00:00 28-08-2026'`) để bảo đảm cấu trúc cột luôn đồng nhất về độ dài và mẫu định dạng.
+2. **Bộ Chuẩn Hóa Lõi Đa Hình (`normalize_datetime_vn`)**:
+   - Được tích hợp trực tiếp tại tầng nghiệp vụ lõi [`services/business_rules.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/services/business_rules.py), xử lý trích xuất và biến đổi linh hoạt mọi biến thể ngày tháng đầu vào từ AI OCR, form người dùng hoặc chuỗi lịch sử (`YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`, `YYYYMMDD`, `HH:MM`, `HH:MM:SS`...).
+   - Tự động gắn tiền tố dấu nháy đơn (`'`) ở đầu chuỗi nhằm ngăn ngừa Google Sheet tự động ép kiểu và làm sai lệch định dạng hiển thị.
+3. **Tương Thích Tuyệt Đối Với Động Cơ Đối Soát Sổ Sách (VAS 01 Reconciliation)**:
+   - Cập nhật hàm `parse_period()` trong [`services/reconciliation_engine.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/services/reconciliation_engine.py) với biểu thức chính quy đa năng nhận diện chính xác Năm tài chính `YYYY` từ chuỗi `HH:MM:SS DD-MM-YYYY`, bảo đảm không làm gián đoạn hay phân loại sai các kỳ đối soát `Reconciliation_Report_YYYY`.
+4. **Di Trú Dữ Liệu An Toàn Tuyệt Đối (Zero-Impact History Migration)**:
+   - Công cụ chuyên dụng [`archive/scripts/migrate_header_datetime_format.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/archive/scripts/migrate_header_datetime_format.py) tự động tạo bản sao lưu Snapshot đầy đủ trước khi thực thi.
+   - Thao tác cập nhật được cô lập duy nhất tại Cột B (`Data_Header_V2!B2:B{N}`), bảo toàn nguyên vẹn 100% tất cả 13 cột còn lại và toàn bộ bảng chi tiết `Data_Lines_V2`.
+
+---
+
+### 3.19. Chuẩn Hóa Luồng Xóa Hóa Đơn Kiến Trúc Relational V2 (v2.13.1)
+
+Nhằm khắc phục triệt để lỗi ngoại lệ khi xóa hóa đơn trên giao diện Đối Soát (`verify.html`):
+
+1. **Khắc Phục Ngoại Lệ `NameError deleted_m`**:
+   - Loại bỏ hoàn toàn các trường tham chiếu legacy (`deleted_legacy_main`, `deleted_legacy_links`) trong từ điển trả về của phương thức `delete_sheet_record` trong [`services/google_service.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/services/google_service.py).
+2. **Đồng Bộ Cấu Trúc Kết Quả Phản Hồi V2**:
+   - Cấu trúc trả về chuẩn hóa gồm:
+     - `success`: Trạng thái thành công (`True`/`False`).
+     - `deleted_header_rows`: Số dòng Header đã xóa khỏi `Data_Header_V2`.
+     - `deleted_lines_rows`: Số dòng chi tiết mặt hàng đã xóa khỏi `Data_Lines_V2`.
+     - `deleted_drive_files`: Số lượng tệp ảnh gốc liên kết đã xóa khỏi Google Drive.
+     - `message`: Thông báo chi tiết kết quả.
+3. **Bảo Toàn Toàn Vẹn Liên Kết Xóa & Chuyển Đổi Đối Tượng**:
+   - Giữ nguyên cờ `delete_drive_file=False` khi chuyển nhóm đối tượng (`changeCategory`) để bảo toàn ảnh Drive, chỉ xóa vĩnh viễn tệp ảnh khi người dùng thực hiện xóa thủ công có chủ đích từ nút "Xóa Khỏi Sheet".
+
+---
+
+### 3.20. Chốt Chặn Khóa Chính & Cơ Chế Chuyển Đổi Nhóm Đối Tượng An Toàn (v2.13.2)
+
+Nhằm khắc phục triệt để lỗi chuyển đổi loại Form làm ghi đè hóa đơn cũ và cam kết **100% bảo toàn dữ liệu gốc**:
+
+1. **Khóa Chặt Mỏ Neo Khóa Chính Tại Nhà Máy Lõi (Primary Key Anchor Guard)**:
+   - Trong phương thức `process_dt1_pipeline` và `update_relational_record` ([`services/google_service.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/services/google_service.py)), mỏ neo khóa chính được khóa chặt tuyệt đối: Cột A của `header_row` và Cột A của mọi dòng `line_rows` luôn được gán bằng `clean_dt_code(dt_code)`, loại bỏ hoàn toàn nguy cơ nhận mã giả/sai lệch từ mảng payload client gửi lên.
+2. **Cơ Chế Đồng Bộ Dữ Liệu Form 2 Chiều (Bidirectional Form Data Sync)**:
+   - Xây dựng hàm `syncFormDataBetweenModes(fromMode, toMode)` trong [`frontend/app.js`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/frontend/app.js): Khi người dùng thay đổi dropdown **"Chọn Loại Form"**, hệ thống tự động ánh xạ và chuyển giao toàn bộ thông tin (ngày tháng, tên đơn vị, địa chỉ, mã đơn/vận đơn, tiền hàng, thuế, người nhận, ghi chú) giữa Form Phẳng (DT1) và Form Chi Tiết (DT2/DT3/DT4), xóa bỏ giá trị mặc định tĩnh `DT10001` trong [`frontend/verify.html`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/frontend/verify.html).
+3. **Động Cơ Chuyển Đổi Đối Tượng Cấp Mã Tuần Tự MAX + 1 (Safe Category Migration)**:
+   - Tại endpoint `PUT /api/v1/sheets/record` ([`server.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/server.py)), khi phát hiện chuyển đổi nhóm đối tượng ($DTX \rightarrow DTY$ với $X \neq Y$):
+     * Hệ thống tự động tra cứu mã lớn nhất của nhóm đích $Y$ trên Sheet và cấp mã mới tuần tự kế tiếp: `new_dt_code = DTY(MAX + 1)`.
+     * Tự động bảo tồn đường dẫn ảnh gốc Google Drive (`drive_link`) và cờ xác nhận kế toán (`confirmed_status`).
+     * Xóa bản ghi cũ trên Sheet (`delete_drive_file=False`).
+     * Nối bản ghi mới vào Sheet thông qua phương thức an toàn `append_relational_v2`.
+4. **Bộ Kiểm Thử Bảo Vệ Khóa & Di Trú (Regression Migration Guard)**:
+   - Tích hợp bài test `test_category_migration_and_key_guard` vào [`test_suite.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/test_suite.py), tự động kiểm soát chống ghi đè và xác nhận tính toàn vẹn của khóa chính trước mọi đợt triển khai.
+
+---
+
+### 3.21. Tách Biệt & Chuẩn Hóa Cơ Chế Xem Hóa Đơn Trực Quan (v2.13.3)
+
+Nhằm khắc phục triệt để lỗi chồng chéo giao diện và co ép khung hình khi xem hóa đơn PDF trên trang Đối Chiếu Hóa Đơn (`verify.html`):
+
+1. **Cách Ly Trạng Thái Hiển Thị Tuyệt Đối (`setVerifyViewerMode`)**:
+   - Quản lý tập trung 3 chế độ xem độc lập: `'empty'`, `'image'`, `'pdf'` trong [`frontend/app.js`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/frontend/app.js):
+     * **Chế độ `'pdf'`:** Ẩn hoàn toàn thẻ Viewport ảnh (`#imageViewport`) và thanh công cụ nổi (`#imageToolbar`), kích hoạt iframe `#receiptPdfPreview` mở rộng trọn vẹn 100% diện tích làm việc của `.split-left`. Khôi phục trải nghiệm xem PDF native nguyên bản của trình duyệt (cuộn đa trang, zoom, tìm kiếm, in ấn).
+     * **Chế độ `'image'`:** Ẩn iframe PDF, kích hoạt `#imageViewport` và `#imageToolbar`, cho phép sử dụng trọn vẹn bộ công cụ tương tác ảnh nổi (Zoom 30%–400%, Pan/Drag, Rotate 90°, Fit Width, Reset, Fullscreen).
+     * **Chế độ `'empty'`:** Ẩn toàn bộ toolbar, viewport và iframe; chỉ hiển thị `#uploadPrompt` nhắc chọn hóa đơn.
+2. **Khắc Phục Xung Đột Flexbox Layout & Toolbar Nổi**:
+   - Loại bỏ hiện tượng flex row chia đôi khung nhìn (khối đen 50% bên trái và PDF 50% bên phải).
+   - Thiết lập mặc định `d-none` cho `#imageToolbar` và `#imageViewport` trong [`frontend/verify.html`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/frontend/verify.html) để chống rò rỉ trạng thái giao diện khi tải trang.
+3. **Đồng Bộ Hóa Khi Chuyển Hóa Đơn**:
+   - Đảm bảo khi người dùng điều hướng hóa đơn bằng chuột hoặc phím tắt bàn phím (`←` / `→`), hệ thống tự động nhận diện định dạng tệp (qua MIME Content-Type và phần mở rộng) để chuyển đổi mượt mà giữa Viewer Ảnh và Viewer PDF mà không để lại hiện tượng lưu ảnh ma hay che khuất giao diện.
+
+---
+
+### 3.22. Chống Lưu Vết Ảnh Ma & Phân Giải Link Drive Đa Tầng An Toàn (v2.13.4)
+
+Khắc phục triệt để lỗi khi người dùng chọn một hóa đơn (ví dụ `DT20279`) nhưng giao diện lại hiển thị hình ảnh của hóa đơn trước đó (ví dụ `DT20002`):
+
+1. **Kiểm Soát Phiên Yêu Cầu Độc Lập Chống Race Condition (`activeViewerRequestId`)**:
+   - Mỗi lần người dùng chọn một hóa đơn mới trong danh sách đối chiếu, hệ thống tăng mã phiên yêu cầu `activeViewerRequestId`.
+   - Các tác vụ bất đồng bộ (`fetch HEAD`, `preview.onload`, `preview.onerror`) bắt buộc phải kiểm tra `currentRequestId === activeViewerRequestId && currentSelectedDt === dtCode` trước khi cập nhật DOM.
+   - Ngăn chặn hoàn toàn hiện tượng phản hồi trễ của hóa đơn cũ (như `DT20002`) đè lên hóa đơn đang xem (`DT20279`).
+2. **Làm Sạch Khung Xem Tức Thì (Instant Viewport Wipe)**:
+   - Ngay khi người dùng nhấp chọn hóa đơn mới, hệ thống chủ động xóa trắng `preview.src = ''` và ẩn các khung hiển thị cũ trước khi tiến hành tải dữ liệu mới. Loại bỏ hoàn toàn hiện tượng nhấp nháy hoặc lưu ảnh ma trên giao diện.
+3. **Phân Giải Đường Dẫn Google Drive Đa Tầng (Multi-Tier Drive Link Resolution)**:
+   - Tại backend ([`services/google_service.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/services/google_service.py)), nâng cấp hàm `get_historical_records` quét link ảnh theo 4 tầng ưu tiên:
+     1. Cột L (Index 11) - Chuẩn 14 cột `Data_Header_V2`.
+     2. Cột K (Index 10) - Định dạng cũ 13 cột.
+     3. Quét toàn bộ các ô trong hàng tìm URL `drive.google.com` hoặc `http`.
+     4. Fallback an toàn tra cứu theo đúng khóa chính `DT_CODE` trong tab `Links_Hoa_Don`.
+   - Trong quá trình di trú danh mục ([`server.py`](file:///c:/Users/lynha/Downloads/Test/Scan_Hoa_Don/server.py)), bảo tồn chính xác link ảnh của bản ghi gốc.
+
+---
+
 ## 4. Quy Trình Hoạt Động
+
 
 ### 4.1. Quy Trình Tổng Thể (6 Bước)
 
@@ -286,11 +703,12 @@ flowchart TD
 ```mermaid
 graph TB
     subgraph "Người Dùng"
-        U["🖥️ Trình duyệt Web\nhttp://localhost:8000"]
+        U["🖥️ Trình duyệt Web\nhttp://localhost:8080"]
     end
 
     subgraph "Docker Container"
-        API["⚡ FastAPI Server\n(server.py)"]
+        NGX["🌐 Nginx Frontend Proxy\n(procurement-frontend)"]
+        API["⚡ FastAPI Server\n(procurement-server: server.py)"]
         OCR["🤖 OCR Engine\n(ocr_engine.py)"]
         BR["📋 Business Rules\n(business_rules.py)"]
         DC["🛡️ Duplicate Checker\n(duplicate_checker.py)"]
@@ -308,7 +726,8 @@ graph TB
         OL["💻 Ollama Server\nqwen2.5-vl:7b"]
     end
 
-    U --> API
+    U --> NGX
+    NGX --> API
     API --> OCR
     API --> BR
     API --> DC
@@ -326,6 +745,7 @@ graph TB
 | :--- | :--- | :--- |
 | **Ngôn ngữ lập trình** | Python | 3.12 |
 | **Web Framework** | FastAPI + Uvicorn | Async, hiệu suất cao |
+| **Frontend Web** | HTML5, Vanilla JS, Bootstrap / Nginx | Dashboard trực quan, xem trước tương tác |
 | **Container** | Docker + Docker Compose | Đóng gói toàn bộ môi trường |
 | **AI Online** | Google Gemini API | `gemini-2.5-flash-lite` (tự động fallback các dòng flash-lite) |
 | **AI Offline** | Ollama | `qwen2.5-vl:7b` (chạy cục bộ trên GPU RTX 2050) |
@@ -334,26 +754,36 @@ graph TB
 | **Xử lý ảnh** | Pillow (PIL) | Đọc, chuyển đổi format ảnh |
 | **HTTP Client** | httpx | Giao tiếp với Gemini API (có retry) |
 
-### 5.3. Cấu Trúc Thư Mục Dự Án
+### 5.3. Cấu Trúc Thư Mục Dự Án (Chuẩn Hóa v2.1)
 
 ```
 Scan_Hoa_Don/
-├── server.py                  # FastAPI Server chính + Giao diện Dashboard HTML/JS
+├── server.py                  # FastAPI Server chính + Điều phối API / SSE Logs
 ├── Dockerfile                 # Docker image: Python 3.12 + Tesseract OCR
-├── docker-compose.yml         # Docker Compose: cấu hình container
+├── docker-compose.yml         # Docker Compose: procurement-server + procurement-frontend
+├── nginx.conf                 # Cấu hình Nginx Reverse Proxy & Static Web
 ├── requirements.txt           # Danh sách thư viện Python
 ├── .env                       # Biến môi trường (API keys, Google IDs)
 ├── service_account.json       # Google Cloud Service Account credentials
-├── test_suite.py              # Bộ kiểm thử tự động (5 test cases)
-├── README.md                  # Tài liệu hệ thống
-├── services/
+├── test_suite.py              # Bộ kiểm thử tự động chính (5 test cases chuẩn)
+├── test_v2_architecture.py    # Unit test kiến trúc v2.0 (Relational, Discount, Filter)
+├── README.md                  # Tài liệu hướng dẫn hệ thống
+├── Project_report             # Báo cáo dự án toàn diện
+├── procurement_rules_specification.md # Đặc tả chi tiết 4 nhóm DT & định dạng
+├── services/                  # Các module nghiệp vụ lõi
 │   ├── ocr_engine.py          # Engine OCR Hybrid (Gemini + Ollama + Tesseract)
-│   ├── business_rules.py      # Phân loại 4 nhóm DT & Định dạng 9 cột
+│   ├── business_rules.py      # Phân loại 4 nhóm DT & Định dạng 10 cột chuẩn
 │   ├── google_service.py      # Google Drive & Sheets API Client
 │   ├── duplicate_checker.py   # Cơ chế chống trùng lặp 2 tầng
 │   └── spell_checker.py       # Kiểm tra chính tả tiếng Việt
-├── samples/                   # Ảnh hóa đơn mẫu để test
-└── config/                    # Tệp cấu hình bổ sung
+├── frontend/                  # Giao diện Web Dashboard độc lập
+│   ├── index.html             # Trang điều hướng chính
+│   ├── verify.html            # Dashboard kiểm duyệt tương tác & quản lý lô quét
+│   ├── manual.html            # Giao diện tải lên & trích xuất đơn lẻ
+│   └── app.js                 # Xử lý logic Frontend & tương tác API
+├── samples/                   # Ảnh hóa đơn mẫu chuẩn
+└── archive/                   # Thư mục lưu trữ công cụ & script phụ trợ
+    └── scripts/               # 21 script audit, migration & đối soát lịch sử
 ```
 
 ### 5.4. Cấu Hình Môi Trường (File `.env`)
@@ -450,7 +880,7 @@ OPENAI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxx
 cd Scan_Hoa_Don
 docker compose up -d
 ```
-Truy cập Dashboard tại: **[http://localhost:8000](http://localhost:8000)**
+Truy cập Dashboard tại: **[http://localhost:8080](http://localhost:8080)**
 
 ---
 
@@ -506,7 +936,7 @@ ollama serve
 Chạy bộ kiểm thử tự động (5 test cases) để xác nhận mọi thành phần hoạt động đúng:
 
 ```powershell
-docker exec procurement-receipt-ocr python test_suite.py
+docker exec procurement-server python test_suite.py
 ```
 
 Kết quả mong đợi:
@@ -522,5 +952,61 @@ Kết quả mong đợi:
 
 ---
 
-> [!TIP]
-> Bạn có thể comment trực tiếp trên từng phần của tài liệu này để đề xuất chỉnh sửa, bổ sung hoặc điều chỉnh nội dung. Tôi sẽ cập nhật ngay theo phản hồi của bạn.
+## 7. CẬP NHẬT CHUẨN HÓA CƠ CHẾ TÍNH TOÁN BẢNG LINES & ĐỐI SOÁT TOÁN HỌC (THÁNG 08/2026)
+
+### 7.1. Chuẩn Hóa Công Thức Tính Toán Toàn Hệ Thống
+Hệ thống đã loại bỏ hoàn toàn các cơ chế phỏng đoán (heuristics) cũ, thống nhất công thức kế toán hai cấp:
+
+1. **Cấp Chi Tiết Mặt Hàng (Bảng Lines):**
+   $$\text{Thành Tiền từng dòng} = (\text{Số Lượng} \times \text{Đơn Giá}) - \text{Tổng CK Mặt Hàng} + \text{Tiền VAT dòng}$$
+   - **Tổng CK Mặt Hàng (đ):** Luôn là tổng số tiền chiết khấu của cả dòng hàng, không tự động nhân thêm với số lượng.
+   - **% Thuế Suất VAT:** Chuyển sang dạng trường số nguyên dương linh hoạt (`<input type="number">`), hỗ trợ mọi mức thuế (0%, 5%, 8%, 10%, v.v.).
+   - **Tính Ngược (Reverse Computation):** Khi người dùng nhập/sửa ô Thành Tiền, hệ thống tự động suy ngược Đơn Giá và Tiền VAT.
+   - **Định dạng Số Lượng (SL):** Hỗ trợ số thập phân với độ chính xác tối đa **4 chữ số sau dấu phẩy** (`step="0.0001"`, ví dụ `0.304`, `1.25`, `0.0025`), tự động loại bỏ số 0 thừa ở đuôi.
+
+2. **Cấp Hóa Đơn Tổng (Header):**
+   $$\mathbf{\text{Tổng Thanh Toán} = \Sigma(\text{Thành Tiền các dòng}) - \text{Chiết Khấu Tổng Bill}}$$
+   - **Chiết Khấu Tổng Bill:** Hoàn toàn tách biệt khỏi các khoản chiết khấu mặt hàng ở từng dòng, đóng vai trò là Voucher / Giảm giá chung cho toàn bộ đơn hàng.
+   - Khử triệt để lỗi trừ chiết khấu hai lần khi mở các hóa đơn từ hệ thống cũ.
+
+### 7.2. Đối Soát Toán Học & Khắc Phục Lỗi Dữ Liệu Cũ
+- **Ô số 2 (Đối Soát Toán Học & Trùng Lặp):** Tự động kiểm tra thời gian thực (Real-time):
+  $$\text{expectedHeaderTotal} = \Sigma(\text{Thành Tiền các dòng}) - \text{Chiết Khấu Tổng Bill}$$
+  Nếu chênh lệch $\le 1.000$ VNĐ (sai số làm tròn tiền lẻ của nhiều dòng), hệ thống tự động xác nhận hợp lệ: `✓ Khớp toán học 100% (Không trùng lặp)`.
+- **Cơ chế tương thích dữ liệu cũ:** Tự động nội suy `% VAT` nếu dòng hàng có `Tiền VAT > 0` nhưng `% VAT = 0` trên Sheet cũ, đảm bảo không bị reset tiền thuế khi người dùng chỉnh sửa.
+
+
+---
+
+## 8. LOẠI BỎ HOÀN TOÀN HỆ THỐNG BẢNG DỮ LIỆU PHẲNG V1 (THÁNG 09/2026)
+
+### 8.1. Bối cảnh
+Từ §3.14 hệ thống đã chuyển sang mô hình quan hệ 2 bảng `Data_Header_V2` / `Data_Lines_V2`;
+2 tab phẳng cũ `Bang_Ke_Hoa_Don` (14 cột gộp) và `Links_Hoa_Don` (5 cột link ảnh) chỉ còn là
+"code chết": không nằm trên đường ghi chính, nhưng vẫn bị vài nhánh phụ tham chiếu.
+
+Kiểm chứng trước khi gỡ (03/09/2026):
+- Toàn bộ 293 mã trong `Bang_Ke_Hoa_Don` và 293 mã trong `Links_Hoa_Don` đều đã tồn tại trong
+  `Data_Header_V2` (751 mã) — 2 tab phẳng là **tập con 100%**, gỡ đi không mất dữ liệu.
+- 751/751 dòng `Data_Header_V2` đã có link ảnh ở Cột L → tầng fallback đọc `Links_Hoa_Don`
+  trong `get_historical_records` không còn cứu thêm dòng nào.
+
+### 8.2. Giai đoạn 1 — Đóng băng (reversible)
+- Snapshot toàn bộ 6 tab ra `ops/backups/` (script mới chụp đủ tab, không chỉ 3 tab như bản cũ).
+- `ops/scripts/archive_flat_v1_tabs.py`: đổi tên `Bang_Ke_Hoa_Don` → `_ARCHIVE_Bang_Ke_Hoa_Don_20260903`,
+  `Links_Hoa_Don` → `_ARCHIVE_Links_Hoa_Don_20260903`, ẩn + tô xám. Có cờ `--dry-run` và `--revert`.
+
+### 8.3. Giai đoạn 2 — Dọn code chết
+| Vùng | Thay đổi |
+|---|---|
+| `server.py` | Gỡ endpoint `POST /api/v1/sheets/deduplicate` và `POST /api/v1/sheets/migrate-v2` (migration đã xong; `ops/migrations/migrate_to_v2.py` giữ làm lịch sử). Auto-scanner bỏ nhánh `append_rows_to_sheet`; không ghi được V2 → log lỗi + bỏ qua. `manual_entry` đường DT1 dựng đúng schema 14/11 cột số thuần (trước đây ghi 13 cột + chuỗi `"0,00 đ"`). Sửa docstring các endpoint. |
+| `services/google_service.py` | Xóa hàm `append_rows_to_sheet`, `append_links_to_sheet`, `deduplicate_all_sheets`; xóa hằng `STANDARD_FLAT_V1_HEADERS`. `overwrite_sheet_data` chỉ nhận `Data_Header_V2` / `Data_Lines_V2`. `get_historical_records` bỏ tầng đọc `Links_Hoa_Don` (giữ Cột L → Cột K → quét URL). `confirm_receipt_in_links` bỏ fallback tab phẳng. `get_audit_reconciliation` map file Drive qua Cột L của Header_V2 thay vì `Links_Hoa_Don`. |
+| `ops/scripts/` | `backup_sheet_state.py`, `reset_processed_pdfs.py`, `audit_and_reset_pdfs.py` bỏ mọi tham chiếu `Bang_Ke_Hoa_Don`. |
+| `.env.example`, `README.md` | Bỏ biến `GOOGLE_SHEET_NAME` / `GOOGLE_SHEET_LINKS_NAME`. |
+| `tests/` | `test_historical_records_drive_link_resolution` bỏ mock `Links_Hoa_Don`, chuyển sang test hàng 13 cột (URL ở Cột K). Toàn bộ 28 test xanh. |
+
+Kiểm chứng runtime sau GĐ2: `/api/v1/sheets/records` trả 751/751 record có link ảnh, 617 đã duyệt;
+`/api/v1/audit/reconciliation` map 751/754 file Drive; 2 endpoint đã gỡ trả 404.
+
+### 8.4. Giai đoạn 3 — Xóa hẳn tab
+Sau khi GĐ2 chạy ổn định ~1–2 kỳ, xóa 2 tab `_ARCHIVE_*_20260903` khỏi Google Sheet.

@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nhập Hóa Đơn Thủ Công | OCR Hóa Đơn</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/styles/overlayscrollbars.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css">
+    
+    <style>
+        .split-container {
+            display: flex;
+            height: calc(100vh - 150px);
+            position: relative;
+            user-select: auto;
+        }
+        .split-left {
+            width: 48%;
+            min-width: 280px;
+            max-width: 80%;
+            background: #18191a;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #3a3b3c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .split-resizer {
+            width: 10px;
+            cursor: col-resize;
+            background: #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            transition: background-color 0.15s ease;
+            position: relative;
+            z-index: 20;
+            margin: 0 2px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+        }
+        .split-resizer:hover, .split-resizer.is-dragging {
+            background: #0d6efd;
+            border-color: #0d6efd;
+        }
+        .split-resizer::after {
+            content: '⋮';
+            color: #6c757d;
+            font-size: 15px;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .split-resizer:hover::after, .split-resizer.is-dragging::after {
+            color: #ffffff;
+        }
+        .split-right {
+            flex: 1;
+            min-width: 380px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        /* Image Viewer Container & Transform */
+        .img-viewport {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: grab;
+        }
+        .img-viewport.is-panning {
+            cursor: grabbing;
+        }
+        .img-preview {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transition: transform 0.1s ease-out;
+            transform-origin: center center;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+        /* Floating Image Toolbar */
+        .image-toolbar {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 15;
+            background: rgba(33, 37, 41, 0.85);
+            backdrop-filter: blur(4px);
+            border-radius: 20px;
+            padding: 3px 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+        .image-toolbar button {
+            background: transparent;
+            border: none;
+            color: #f8f9fa;
+            font-size: 13px;
+            padding: 3px 7px;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+        .image-toolbar button:hover {
+            background: rgba(255,255,255,0.25);
+            color: #fff;
+        }
+        .image-toolbar .zoom-level-text {
+            color: #ffc107;
+            font-size: 11px;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+        }
+        .dropzone-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #aaa;
+            border: 2px dashed #666;
+            border-radius: 8px;
+            cursor: pointer;
+            background: rgba(30,30,30,0.85);
+        }
+        .dropzone-overlay.dragover {
+            background: rgba(50,50,50,0.95);
+            border-color: #0d6efd;
+            color: #fff;
+        }
+
+        /* Excel-like Table Styling */
+        .table-responsive-custom {
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+            max-height: 320px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: #fff;
+        }
+        .table-responsive-custom::-webkit-scrollbar {
+            height: 10px;
+            width: 8px;
+        }
+        .table-responsive-custom::-webkit-scrollbar-track {
+            background: #f1f3f5;
+        }
+        .table-responsive-custom::-webkit-scrollbar-thumb {
+            background: #adb5bd;
+            border-radius: 4px;
+        }
+        .table-responsive-custom::-webkit-scrollbar-thumb:hover {
+            background: #6c757d;
+        }
+
+        .table-excel {
+            min-width: 1400px;
+            table-layout: fixed;
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+        }
+        .table-excel th {
+            position: relative;
+            background-color: #212529 !important;
+            color: #fff;
+            user-select: none;
+            padding: 6px 6px !important;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .table-excel td {
+            padding: 3px 4px !important;
+            vertical-align: middle;
+        }
+        .table-excel td .form-control, .table-excel td .form-select {
+            font-size: 12px;
+            border-radius: 3px;
+        }
+
+        /* Resizable Column Handle */
+        .col-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            cursor: col-resize;
+            user-select: none;
+            height: 100%;
+            z-index: 5;
+        }
+        .col-resizer:hover, .col-resizer.is-resizing {
+            background-color: #0d6efd;
+        }
+    </style>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+    <div class="app-wrapper">
+        <nav class="app-header navbar navbar-expand bg-body">
+            <div class="container-fluid">
+                <ul class="navbar-nav">
+                    <li class="nav-item"> <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button"> <i class="bi bi-list"></i> </a> </li>
+                </ul>
+            </div>
+        </nav>
+
+        <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+            <div class="sidebar-brand">
+                <a href="index.html" class="brand-link">
+                    <span class="brand-text fw-light">OCR Hóa Đơn</span>
+                </a>
+            </div>
+            <div class="sidebar-wrapper">
+                <nav class="mt-2">
+                    <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="menu" data-accordion="false">
+                        <li class="nav-item">
+                            <a href="index.html" class="nav-link">
+                                <i class="nav-icon bi bi-speedometer2"></i>
+                                <p>Bảng Điều Khiển</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="verify.html" class="nav-link">
+                                <i class="nav-icon bi bi-file-check"></i>
+                                <p>Đối Chiếu Hóa Đơn</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="manual.html" class="nav-link active">
+                                <i class="nav-icon bi bi-keyboard"></i>
+                                <p>Nhập Hóa Đơn Thủ Công</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="reconcile.html" class="nav-link">
+                                <i class="nav-icon bi bi-wallet2"></i>
+                                <p>Đối Soát Sổ Sách</p>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        <main class="app-main">
+            <div class="app-content-header pb-2">
+                <div class="container-fluid">
+                    <div class="row align-items-center mb-2">
+                        <div class="col-md-5">
+                            <h4 class="mb-0">Nhập Hóa Đơn Thủ Công</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="app-content">
+                <div class="container-fluid">
+                    <div class="split-container" id="manualSplitContainer">
+                        <!-- Left Side: Image Upload & Preview -->
+                        <div class="split-left" id="manualUploadZone">
+                            <!-- Floating Image Action Bar -->
+                            <div class="image-toolbar" id="manualImageToolbar">
+                                <button type="button" onclick="zoomImage(0.15, 'manual')" title="Phóng to (+15%)"><i class="bi bi-zoom-in"></i></button>
+                                <span class="zoom-level-text" id="manualZoomLevelIndicator">100%</span>
+                                <button type="button" onclick="zoomImage(-0.15, 'manual')" title="Thu nhỏ (-15%)"><i class="bi bi-zoom-out"></i></button>
+                                <button type="button" onclick="rotateImage('manual')" title="Xoay ảnh 90°"><i class="bi bi-arrow-clockwise"></i></button>
+                                <button type="button" onclick="fitImageWidth('manual')" title="Khớp chiều ngang"><i class="bi bi-arrows-expand-vertical"></i></button>
+                                <button type="button" onclick="resetImageTransform('manual')" title="Đặt lại mặc định"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                <button type="button" onclick="toggleFullscreenPreview('manual')" title="Toàn màn hình"><i class="bi bi-fullscreen"></i></button>
+                            </div>
+
+                            <div id="manualUploadPrompt" class="text-secondary p-4 text-center">
+                                <i class="bi bi-folder-symlink display-4 mb-3 d-block text-primary"></i>
+                                <h5 id="manualPromptTitle">Chọn ảnh từ thư mục Chưa xử lý</h5>
+                                <div class="d-flex gap-2 mt-3 justify-content-center">
+                                    <select class="form-select w-75" id="unprocessedFilesSelect" onchange="handleUnprocessedFileSelected()">
+                                        <option value="">-- Đang tải danh sách file... --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="loadUnprocessedFiles()" title="Tải lại danh sách">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="img-viewport" id="manualImageViewport">
+                                <img id="manualImagePreview" src="" alt="Bản xem trước" class="img-preview d-none">
+                            </div>
+                        </div>
+
+                        <!-- Splitter Draggable Bar -->
+                        <div class="split-resizer" id="manualSplitResizer" title="Kéo sang trái/phải để thay đổi tỷ lệ khung ảnh & form"></div>
+
+                        <!-- Right Side: Form Fields -->
+                        <div class="split-right" id="manualSplitRightContainer">
+                            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <label class="form-label small fw-bold mb-0 text-secondary"><i class="bi bi-ui-checks-grid me-1"></i>Chọn Loại Form Nhập:</label>
+                                    <select class="form-select form-select-sm fw-bold border-primary shadow-sm" id="manualFormTypeSelector" onchange="onManualFormTypeChanged(this.value)" style="width: auto; min-width: 250px;">
+                                        <option value="DT4" selected class="text-danger">📝 DT4: Hóa Đơn Viết Tay / Giấy (Header & Lines)</option>
+                                        <option value="DT1" class="text-primary">🛒 DT1: Sàn TMĐT & Ship (Form Phẳng)</option>
+                                        <option value="DT2" class="text-success">🏪 DT2: Siêu Thị & Bán Lẻ Chung Quy (Header & Lines)</option>
+                                        <option value="DT3" class="text-warning">🌾 DT3: Nông Sản & Thực Phẩm (Header & Lines)</option>
+                                    </select>
+                                </div>
+                                <span id="manualCategoryBadge" class="badge bg-danger">DT4: Viết Tay</span>
+                            </div>
+
+                            <form id="manualVerifyForm">
+                                <!-- VIEW 1: ĐỐI TƯỢNG 1 (SÀN TMĐT & SHIP - FORM PHẲNG) -->
+                                <div id="manualFlatContainer" class="d-none">
+                                    <div class="alert alert-primary py-1 px-2 mb-2 small d-flex align-items-center gap-2">
+                                        <i class="bi bi-cart3"></i>
+                                        <strong>Form Nhập Đơn Hàng TMĐT (DT1)</strong> - Tóm tắt thông tin gói hàng & COD
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold">1. Mã (Tự Động Sinh)</label>
+                                            <input type="text" class="form-control form-control-sm bg-light" id="m_dt_code" value="DT1 (Auto)" readonly>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold">2. Ngày, Tháng, Năm</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_date" placeholder="DD/MM/YYYY">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold">3. Mã Đơn / Vận Đơn</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_order_id">
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label small fw-bold">4. Tên Sàn / Người Bán</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_company">
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label small">5. Địa Chỉ Bên Bán / Bưu cục</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_seller_address">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small">6. Địa Chỉ Bên Nhận</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_buyer_address">
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label small fw-bold">7. Tên Hàng Hóa, Dịch Vụ (Tóm tắt)</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_description">
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">8. Số Lượng Gói</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_quantity" value="1" oninput="recomputeManualAmounts()">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">9. Đơn Giá / Tiền Hàng</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_unit_price" value="0,00 đ" oninput="recomputeManualAmounts()">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small text-primary fw-semibold">Chiết Khấu / Voucher</label>
+                                            <input type="text" class="form-control form-control-sm text-primary" id="m_discount_amount" value="0,00 đ" oninput="recomputeManualAmounts()">
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small">10. % VAT</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_vat_rate" value="0%">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">11. Tiền VAT</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_vat_amount" value="0,00 đ" oninput="recomputeManualAmounts()">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold text-success">12. Tổng Thanh Toán (COD)</label>
+                                            <input type="text" class="form-control form-control-sm fw-bold text-success" id="m_total_amount" value="0,00 đ">
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label small">13. Người Nhận Hàng</label>
+                                            <input type="text" class="form-control form-control-sm" id="m_buyer_name">
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label small text-danger">14. Ghi Chú (Chi tiết sản phẩm)</label>
+                                            <textarea class="form-control form-control-sm" id="m_notes" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- VIEW 2: ĐỐI TƯỢNG 2, 3, 4 (HEADER & INTERACTIVE LINES TABLE) -->
+                                <div id="manualRelationalContainer">
+                                    <!-- Header Form -->
+                                    <div class="card card-body bg-light border-0 shadow-sm p-3 mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="text-secondary fw-bold mb-0"><i class="bi bi-card-heading me-1"></i> A. THÔNG TIN HÓA ĐƠN TỔNG (HEADER)</h6>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">Mã (Tự Động Sinh)</label>
+                                                <input type="text" class="form-control form-control-sm bg-white" id="m_h_dt_code" value="DT4 (Auto)" readonly>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">Ngày, Tháng, Năm</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_date" placeholder="DD/MM/YYYY">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">Số Hóa Đơn / Mã Chứng Từ</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_doc_code">
+                                            </div>
+
+                                            <div class="col-md-8">
+                                                <label class="form-label small fw-bold">Tên Công Ty / Cửa Hàng / Đơn Vị Bán</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_company">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Người Mua / Nhận Hàng</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_buyer_name">
+                                            </div>
+
+                                            <div class="col-md-6">
+                                                <label class="form-label small">Địa Chỉ Bên Bán</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_seller_addr">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small">Địa Chỉ Bên Nhận</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_buyer_addr">
+                                            </div>
+
+                                            <!-- Financial Summary Block -->
+                                            <div class="col-md-3">
+                                                <label class="form-label small">Tổng Tiền Gốc (Lines)</label>
+                                                <input type="text" class="form-control form-control-sm bg-white" id="m_h_raw_amount" value="0,00 đ" oninput="recomputeManualRelationalHeader('manual-raw')">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small text-primary fw-semibold">Chiết Khấu Tổng Bill</label>
+                                                <input type="text" class="form-control form-control-sm text-primary" id="m_h_discount" value="0,00 đ" oninput="recomputeManualRelationalHeader('manual-disc')">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small">Thuế VAT Tổng</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_vat" value="0,00 đ" oninput="recomputeManualRelationalHeader('manual-vat')">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small fw-bold text-success">Tổng Thanh Toán</label>
+                                                <input type="text" class="form-control form-control-sm fw-bold text-success bg-white" id="m_h_final_payment" value="0,00 đ" oninput="recomputeManualRelationalHeader('manual-final')">
+                                            </div>
+
+                                            <div class="col-12">
+                                                <label class="form-label small">Ghi Chú Chung</label>
+                                                <input type="text" class="form-control form-control-sm" id="m_h_notes">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Interactive Lines Table -->
+                                    <div class="card card-body border-0 shadow-sm p-3 mb-2">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="text-secondary fw-bold mb-0">
+                                                <i class="bi bi-list-check me-1"></i> B. DANH SÁCH CHI TIẾT MẶT HÀNG (LINES)
+                                                <span class="badge bg-secondary ms-1" id="m_linesCountBadge">1 dòng</span>
+                                            </h6>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addManualLineItemRow()">
+                                                <i class="bi bi-plus-circle me-1"></i> Thêm Mặt Hàng
+                                            </button>
+                                        </div>
+
+                                        <div class="table-responsive-custom">
+                                            <table class="table table-bordered table-hover table-sm align-middle small mb-0 table-excel" id="manualLinesTable">
+                                                <thead class="table-dark sticky-top" style="font-size: 11px;">
+                                                    <tr class="text-center align-middle">
+                                                        <th style="width: 40px;">#<div class="col-resizer"></div></th>
+                                                        <th style="width: 110px;">Mã SKU<div class="col-resizer"></div></th>
+                                                        <th style="width: 280px;">Tên Hàng Hóa, Dịch Vụ<div class="col-resizer"></div></th>
+                                                        <th style="width: 70px;">SL<div class="col-resizer"></div></th>
+                                                        <th style="width: 75px;">ĐVT<div class="col-resizer"></div></th>
+                                                        <th style="width: 120px;">Đơn Giá (đ)<div class="col-resizer"></div></th>
+                                                        <th style="width: 110px;">CK (đ)<div class="col-resizer"></div></th>
+                                                        <th style="width: 75px;">CK (%)<div class="col-resizer"></div></th>
+                                                        <th style="width: 80px;">% VAT<div class="col-resizer"></div></th>
+                                                        <th style="width: 115px;">Tiền VAT<div class="col-resizer"></div></th>
+                                                        <th style="width: 130px;">Thành Tiền<div class="col-resizer"></div></th>
+                                                        <th style="width: 45px;">Xóa</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="manualLinesTableBody">
+                                                    <!-- Dynamic Lines -->
+                                                </tbody>
+                                                <tfoot class="table-light fw-bold" style="font-size: 11px;">
+                                                    <tr>
+                                                        <td colspan="3" class="text-end">TỔNG CỘNG:</td>
+                                                        <td id="m_tfootTotalQty" class="text-center">0</td>
+                                                        <td></td>
+                                                        <td id="m_tfootTotalRaw" class="text-end text-muted">0,00 đ</td>
+                                                        <td id="m_tfootTotalDiscount" class="text-end text-primary">0,00 đ</td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td id="m_tfootTotalVat" class="text-end">0,00 đ</td>
+                                                        <td id="m_tfootTotalFinal" class="text-end text-success fs-6">0,00 đ</td>
+                                                        <td></td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr class="my-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetManualForm()">
+                                        <i class="bi bi-eraser me-1"></i> Xóa Trắng Form
+                                    </button>
+                                    
+                                    <button type="button" class="btn btn-primary btn-sm" id="btnSubmitManual" onclick="submitManualReceipt()">
+                                        <i class="bi bi-cloud-arrow-up me-1"></i> Lưu Hóa Đơn Vào Sheet V2
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Floating Toast Notification Container -->
+    <div class="toast-container position-fixed bottom-0 start-0 p-3" style="z-index: 1200;">
+        <div id="liveToast" class="toast align-items-center text-bg-success border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body fs-6" id="toastMessage"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.3.0/browser/overlayscrollbars.browser.es6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
+    <script src="app.js?v=20260823_v270_input"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Tải danh sách file khi trang được mở
+            if (typeof loadUnprocessedFiles === 'function') {
+                loadUnprocessedFiles();
+            }
+            
+            // Set today's date
+            const today = new Date();
+            const dateInput = document.getElementById('m_date');
+            if (dateInput) {
+                dateInput.value = today.toLocaleDateString('en-GB');
+            }
+        });
+    </script>
+</body>
+</html>

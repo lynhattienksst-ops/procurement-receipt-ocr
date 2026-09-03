@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bảng điều khiển Mua vào</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --ink: #1c2430;
+    --muted: #5b6572;
+    --rule: #e0e3e8;
+    --accent: #294fa6;
+    --ok: #1f7a4d;
+    --warn: #9a6a00;
+    --bad: #b23b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c;
+      --panel: #1a1f27;
+      --ink: #e6e9ee;
+      --muted: #9aa4b1;
+      --rule: #2b323c;
+      --accent: #7da3f0;
+      --ok: #5bbd8a;
+      --warn: #d9a441;
+      --bad: #e0736f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c;
+    --panel: #1a1f27;
+    --ink: #e6e9ee;
+    --muted: #9aa4b1;
+    --rule: #2b323c;
+    --accent: #7da3f0;
+    --ok: #5bbd8a;
+    --warn: #d9a441;
+    --bad: #e0736f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 48px 20px 64px; }
+  header { border-bottom: 2px solid var(--accent); padding-bottom: 16px; margin-bottom: 28px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .2px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); margin: 0 0 14px;
+  }
+  dl { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; margin: 0; }
+  dt { color: var(--muted); font-size: 13px; }
+  dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-word; }
+  code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 13px; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .tag.ok  { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .tag.bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+  .tag.wait{ background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+  .roadmap { list-style: none; padding: 0; margin: 0; }
+  .roadmap li { display: flex; gap: 10px; padding: 6px 0; font-size: 14px; border-bottom: 1px dashed var(--rule); }
+  .roadmap li:last-child { border-bottom: 0; }
+  .roadmap .p { color: var(--accent); font-weight: 700; min-width: 34px; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bảng điều khiển Mua vào</h1>
+    <div class="sub">Hệ thống OCR Hóa đơn Mua vào — dịch vụ đọc dữ liệu (chỉ-đọc) trên Google Sheet đang chạy.</div>
+  </header>
+
+  <div class="panel">
+    <h2>Trạng thái triển khai — P0</h2>
+    <dl>
+      <dt>Giai đoạn</dt><dd>P0 — Nền tảng (khung deploy). Biểu đồ thật sẽ có ở P3.</dd>
+      <dt>Build (commit)</dt><dd><code>{{BUILD_SHA}}</code></dd>
+      <dt>Build lúc</dt><dd>{{BUILD_TIME}}</dd>
+      <dt>Kết nối Sheet</dt><dd id="sheet-status"><span class="tag wait">đang kiểm tra…</span></dd>
+    </dl>
+  </div>
+
+  <div class="panel">
+    <h2>Chẩn đoán trực tiếp</h2>
+    <dl id="diag"><dt>/api/health</dt><dd>đang gọi…</dd></dl>
+  </div>
+
+  <div class="panel">
+    <h2>Lộ trình</h2>
+    <ul class="roadmap">
+      <li><span class="p">P0</span><span>Data contract + khung Cloud Run + pipeline deploy (đang chạy).</span></li>
+      <li><span class="p">P1</span><span>Lớp chất lượng dữ liệu — chỉ số completeness / validity / integrity, ngưỡng Đỏ/Vàng/Xanh.</span></li>
+      <li><span class="p">P2</span><span>Lớp phân tích — MoM/YoY, trung bình trượt, Pareto NCC + HHI, phát hiện bất thường, ngoại lệ đối soát theo tiền.</span></li>
+      <li><span class="p">P3</span><span>Trực quan hóa — view Điều hành (ưu tiên ngoại lệ) + view Vận hành, ECharts, filter tương tác.</span></li>
+      <li><span class="p">P4</span><span>Hoàn thiện — tài liệu, rollback, chốt bản.</span></li>
+    </ul>
+  </div>
+
+  <footer>Chỉ-đọc với dữ liệu nguồn. Điều chỉnh bằng cách yêu cầu Claude → commit → tự deploy (~3 phút).</footer>
+</div>
+
+<script>
+(function () {
+  var esc = function (s) { return String(s).replace(/[&<>]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); };
+
+  fetch("api/health", { headers: { "accept": "application/json" } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var s = (d && d.sheets) || {};
+      var reach = s.reachable === true;
+      var badge = reach
+        ? '<span class="tag ok">đã kết nối</span>'
+        : '<span class="tag bad">chưa kết nối</span>';
+      var title = s.spreadsheet_title ? " — " + esc(s.spreadsheet_title) : "";
+      document.getElementById("sheet-status").innerHTML = badge + esc(title);
+
+      var rows = [
+        ["auth_mode", s.auth_mode],
+        ["reachable", String(s.reachable)],
+        ["spreadsheet", s.spreadsheet_title || "—"],
+        ["Data_Header_V2", String(s.header_tab_present)],
+        ["Data_Lines_V2", String(s.lines_tab_present)],
+        ["cache_ttl_s", d.cache_ttl_s],
+        ["server_time", d.server_time]
+      ];
+      if (s.error) rows.push(["error", s.error]);
+      document.getElementById("diag").innerHTML = rows.map(function (kv) {
+        return "<dt>" + esc(kv[0]) + "</dt><dd><code>" + esc(kv[1]) + "</code></dd>";
+      }).join("");
+    })
+    .catch(function (e) {
+      document.getElementById("sheet-status").innerHTML =
+        '<span class="tag bad">lỗi</span>';
+      document.getElementById("diag").innerHTML =
+        "<dt>lỗi</dt><dd><code>" + esc(e && e.message || e) + "</code></dd>";
+    });
+})();
+</script>
+</body>
+</html>

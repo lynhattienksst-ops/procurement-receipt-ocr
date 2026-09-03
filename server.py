@@ -1,5 +1,6 @@
-import os
+﻿import os
 import io
+import re
 import json
 import logging
 from typing import Optional, Dict, Any, List
@@ -19,7 +20,7 @@ logger = logging.getLogger("procurement-server")
 
 # Import internal services
 from services.ocr_engine import UnifiedOCREngine
-from services.business_rules import detect_business_category, format_receipt_to_sheet_rows, check_vat_alert
+from services.business_rules import detect_business_category, format_receipt_to_sheet_rows, format_receipt_to_relational_v2, check_vat_alert, classify_line_item
 from services.spell_checker import validate_receipt_fields, check_vietnamese_spelling
 from services.duplicate_checker import DuplicateChecker
 from services.google_service import GoogleSyncService
@@ -29,6 +30,30 @@ try:
     import pytesseract
 except ImportError:
     pytesseract = None
+
+def _fill_line_group_columns(line_rows, dt_code):
+    """
+    Chuẩn hóa danh sách dòng Lines lên 14 cột (A→N) và gán Cột M "Nhóm hàng" +
+    Cột N "Nguồn phân loại" qua classify_line_item(tên=C, ĐVT=E).
+    Dùng cho các đường ghi gọi thẳng append_relational_v2 (manual-entry, chuyển nhóm).
+    DT1 = dòng gộp → chỉ giữ DV_SAN nếu là phí sàn, còn lại CAN_SOAT.
+    Tôn trọng giá trị người sửa tay (Cột N == 'manual').
+    """
+    is_dt1 = str(dt_code or "").strip().upper().startswith("DT1")
+    out = []
+    for lr in line_rows:
+        r = list(lr)
+        while len(r) < 14:
+            r.append("")
+        if str(r[12] or "").strip() and str(r[13] or "").strip().lower() == "manual":
+            out.append(r)
+            continue
+        g_code, g_src = classify_line_item(r[2], r[4], is_dt1=is_dt1)
+        r[12] = g_code
+        r[13] = g_src
+        out.append(r)
+    return out
+
 
 # Initialize core services
 ocr_engine = UnifiedOCREngine()
@@ -54,16 +79,45 @@ staged_receipts: List[Dict[str, Any]] = []
 
 # Concurrency Mutex Lock for Scans & Sheet Exports
 scan_lock = asyncio.Lock()
+# Dedicated Granular Lock for Sheet Writes (preserves monotonic continuity & prevents concurrent write collisions)
+sheet_write_lock = asyncio.Lock()
+
+# Parallel Processing Concurrency Limits (Configurable via environment variables)
+MAX_CONCURRENT_DOWNLOADS = int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "5"))
+download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
+
+MAX_CONCURRENT_OCR = int(os.getenv("MAX_CONCURRENT_OCR", "3"))
+ocr_semaphore = asyncio.Semaphore(MAX_CONCURRENT_OCR)
 
 # Auto-scan configuration & real-time telemetry
 AUTO_SCAN_ENABLED = False
-SCAN_INTERVAL_SECONDS = 60
-ACTIVE_AI_MODEL = os.getenv("OPENAI_MODEL", "gemini-3.1-flash-lite")
-LAST_SCAN_TIME = None
+SCAN_INTERVAL_SECONDS = 300
+ACTIVE_AI_MODEL = os.getenv("OPENAI_MODEL", "gemini-2.5-flash-lite")
+LAST_SCAN_TIME = "Chưa quét"
 LAST_PROCESSED_COUNT = 0
 LAST_SCAN_MESSAGE = ""
 CURRENT_SCAN_PROGRESS = ""
 SCAN_STOP_REQUESTED = False
+# Output Directory for Internship Results & Exports
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/app/ket_qua" if os.path.exists("/app") else os.path.join(os.path.dirname(__file__), "..", "Thực tập tốt nghiệp", "Kết quả"))
+try:
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+except Exception:
+    pass
+
+def save_result_to_output_dir(data: Any, prefix: str = "ket_qua") -> str:
+    """Save JSON snapshot of scan/export results to OUTPUT_DIR (Thực tập tốt nghiệp/Kết quả)."""
+    try:
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = os.path.join(OUTPUT_DIR, f"{prefix}_{timestamp}.json")
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"Saved result snapshot to: {filepath}")
+        return filepath
+    except Exception as err:
+        logger.warning(f"Could not save snapshot to {OUTPUT_DIR}: {err}")
+        return ""
 
 
 @app.get("/health")
@@ -266,19 +320,24 @@ async def run_automated_scan():
                     max_indexes[cat_id] += 1
                     curr_idx = max_indexes[cat_id]
 
-                    rows, meta = format_receipt_to_sheet_rows(parsed_data, category_id=cat_id, current_index=curr_idx)
-                    
-                    if rows:
-                        await asyncio.to_thread(google_service.append_rows_to_sheet, rows)
-                        link_url = f"https://drive.google.com/file/d/{file_id}/view"
-                        dt_code = meta["dt_code"]
-                        confirm_initial = "⚠️ Nghi vấn trùng" if is_dup else ""
-                        await asyncio.to_thread(google_service.append_links_to_sheet, [[dt_code, file_name, link_url, confirm_initial]])
-                        
-                        if processed_folder_id:
-                            await asyncio.to_thread(google_service.move_file_to_folder, file_id, processed_folder_id)
-                        
-                        success_count += 1
+                    link_url = f"https://drive.google.com/file/d/{file_id}/view"
+                    header_row, line_rows, meta_v2 = format_receipt_to_relational_v2(
+                        parsed_data, category_id=cat_id, current_index=curr_idx, drive_link=link_url
+                    )
+
+                    if header_row and line_rows:
+                        await asyncio.to_thread(google_service.append_relational_v2, [header_row], line_rows)
+                    else:
+                        logger.error(
+                            f"Auto-scan: format_receipt_to_relational_v2 returned no V2 rows for "
+                            f"{file_name} (cat {cat_id}); skipping sheet write."
+                        )
+                        continue
+
+                    if processed_folder_id:
+                        await asyncio.to_thread(google_service.move_file_to_folder, file_id, processed_folder_id)
+
+                    success_count += 1
 
                 except Exception as item_err:
                     logger.error(f"Error auto-processing file {file_name}: {item_err}")
@@ -384,101 +443,232 @@ async def set_active_model(payload: dict = Body(...)):
             logger.warning(f"Could not persist model to .env: {env_err}")
     return {"success": True, "active_model": ACTIVE_AI_MODEL}
 
+def extract_pdf_base_key(file_name: str, file_id: str) -> Optional[str]:
+    """
+    Extract normalized primary key for PDF files & multi-page scan files to group all pages/continuations of the same invoice together.
+    """
+    fn_lower = str(file_name or "").lower().strip()
+    is_pdf = fn_lower.endswith(".pdf") or ".pdf" in fn_lower
+    has_page_suffix = bool(re.search(r"[\._\-]?p(?:age)?\d+", fn_lower))
 
-@app.post("/api/v1/drive/process-batch")
-async def process_drive_batch(
+    if is_pdf or has_page_suffix:
+        clean_name = re.sub(r"[\._\-]?p(?:age)?\d+", "", fn_lower)
+        clean_name = re.sub(r"\.(pdf|png|jpg|jpeg|webp)$", "", clean_name).strip()
+        if clean_name:
+            return f"pdf_name_{clean_name}"
+        return f"pdf_id_{file_id}"
+    return None
+
+
+async def _download_drive_file_concurrent(file_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Download a single Drive file with concurrency throttling."""
+    file_id = file_info["id"]
+    file_name = file_info["name"]
+    async with download_semaphore:
+        try:
+            img_bytes, _ = await asyncio.to_thread(google_service.download_file_bytes, file_id)
+            return {"file_info": file_info, "bytes": img_bytes, "error": None}
+        except Exception as dl_err:
+            logger.error(f"Async download error for {file_name}: {dl_err}")
+            return {"file_info": file_info, "bytes": None, "error": str(dl_err)}
+
+
+async def _run_ocr_concurrent(download_res: Dict[str, Any], mode: str) -> Dict[str, Any]:
+    """Run OCR for a downloaded receipt with concurrency throttling."""
+    if download_res.get("error") or not download_res.get("bytes"):
+        return {**download_res, "parsed_data": None}
+    
+    file_name = download_res["file_info"]["name"]
+    img_bytes = download_res["bytes"]
+    async with ocr_semaphore:
+        try:
+            parsed_data = await asyncio.to_thread(
+                ocr_engine.process_image, img_bytes, mode=mode, custom_model=ACTIVE_AI_MODEL
+            )
+            return {**download_res, "parsed_data": parsed_data, "error": None}
+        except Exception as ocr_err:
+            logger.error(f"Async OCR error for {file_name}: {ocr_err}")
+            return {**download_res, "parsed_data": None, "error": str(ocr_err)}
+
+
+@app.post("/api/v1/drive/scan")
+async def scan_drive_folder(
     folder_id: Optional[str] = Form(None),
-    mode: Optional[str] = Form("auto")
+    mode: str = Form("auto")
 ):
     """
-    Automatically download images from Google Drive folder, run OCR & Classification,
-    perform Duplicate/VAT/Spell checks, and stage results for review.
+    Parallelized batch scanner (v2.6.0):
+    1. Downloads all files concurrently via download_semaphore.
+    2. Runs OCR concurrently via ocr_semaphore (Gemini Cloud / Ollama).
+    3. Sequentially applies Business Rules, PDF merging, and Duplicate Guards with Zero Impact on Sheet data.
     """
     global staged_receipts
     try:
-        drive_files = google_service.list_images_in_folder(folder_id)
+        drive_files = await asyncio.to_thread(google_service.list_images_in_folder, folder_id)
         if not drive_files:
-            return {"success": True, "message": "Không tìm thấy ảnh nào trong thư mục Google Drive.", "staged": []}
+            return {"success": True, "message": "Không tìm thấy ảnh hoặc file PDF nào trong thư mục Google Drive.", "staged": []}
 
-        # Initialize duplicate checker fresh from current sheet data
+        # Step 1: Parallel Download from Google Drive
+        logger.info(f"Starting parallel download for {len(drive_files)} files (concurrency={MAX_CONCURRENT_DOWNLOADS})...")
+        download_tasks = [_download_drive_file_concurrent(f) for f in drive_files]
+        download_results = await asyncio.gather(*download_tasks)
+
+        # Step 2: Parallel OCR Execution via Gemini Cloud
+        logger.info(f"Starting parallel OCR processing (concurrency={MAX_CONCURRENT_OCR})...")
+        ocr_tasks = [_run_ocr_concurrent(item, mode=mode) for item in download_results]
+        ocr_results = await asyncio.gather(*ocr_tasks)
+
+        # Step 3: Initialize Duplicate Checker from live Sheet data (Read-Only)
         checker = DuplicateChecker()
+        historical_codes = set()
         try:
-            sheet_rows = google_service.get_sheet_data()
+            sheet_rows = await asyncio.to_thread(google_service.get_sheet_data)
             checker.load_from_sheet_rows(sheet_rows)
-            max_indexes = google_service.get_max_indexes_by_category()
+            historical_codes = set(checker.seen_codes)
+            max_indexes = await asyncio.to_thread(google_service.get_max_indexes_by_category)
         except Exception:
             max_indexes = {1: 0, 2: 0, 3: 0, 4: 0}
 
         staged_results = []
-        for f in drive_files:
-            file_id = f["id"]
-            file_name = f["name"]
-            try:
-                img_bytes, _ = google_service.download_file_bytes(file_id)
-                parsed_data = ocr_engine.process_image(img_bytes, mode=mode, custom_model=ACTIVE_AI_MODEL)
+        batch_invoice_map = {}
 
-                cat_id, cat_name = detect_business_category(parsed_data)
-                max_indexes[cat_id] += 1
-                curr_idx = max_indexes[cat_id]
+        # Step 4: Sequentially group, classify, format, and guard results
+        for res in ocr_results:
+            file_info = res["file_info"]
+            file_id = file_info["id"]
+            file_name = file_info["name"]
 
-                doc_codes = [
-                    parsed_data.get("object_code"),
-                    parsed_data.get("dt_code"),
-                    parsed_data.get("order_id"),
-                    parsed_data.get("tracking_number"),
-                    parsed_data.get("invoice_number"),
-                    parsed_data.get("receipt_number")
-                ]
-                is_dup = False
-                dup_msg = ""
-                for c in doc_codes:
-                    if c and str(c).strip():
-                        is_d, msg = checker.check_duplicate(str(c))
-                        if is_d:
-                            is_dup = True
-                            dup_msg = msg
-                            break
-
-                for c in doc_codes:
-                    if c and str(c).strip():
-                        checker.add_code(str(c))
-
-                has_vat, vat_amt, vat_alert = check_vat_alert(parsed_data)
-                spell_warnings = validate_receipt_fields(parsed_data)
-
-                rows, meta = format_receipt_to_sheet_rows(parsed_data, category_id=cat_id, current_index=curr_idx)
-
-                item_entry = {
-                    "drive_file_id": file_id,
-                    "filename": file_name,
-                    "category": {"id": cat_id, "name": cat_name, "dt_code": meta["dt_code"]},
-                    "warnings": {
-                        "is_duplicate": is_dup,
-                        "duplicate_message": dup_msg,
-                        "has_vat": has_vat,
-                        "vat_amount": vat_amt,
-                        "vat_alert": vat_alert,
-                        "spell_warnings": spell_warnings
-                    },
-                    "formatted_rows": rows,
-                    "buyer_address": parsed_data.get("customer_address") or "",
-                    "approved": not is_dup, # Auto-approve if not duplicate
-                    "engine_used": parsed_data.get("_engine_used", mode)
-                }
-                staged_results.append(item_entry)
-            except Exception as item_err:
-                logger.error(f"Error processing Drive file {file_name}: {item_err}")
+            if res.get("error") or not res.get("parsed_data"):
                 staged_results.append({
                     "drive_file_id": file_id,
                     "filename": file_name,
-                    "error": str(item_err)
+                    "error": res.get("error", "Không thể trích xuất thông tin OCR.")
                 })
+                continue
+
+            parsed_data = res["parsed_data"]
+            cat_id, cat_name = detect_business_category(parsed_data)
+
+            # Primary key for PDF file merging: PDF Filename / File ID
+            pdf_base_key = extract_pdf_base_key(file_name, file_id)
+            doc_codes = []
+            if pdf_base_key:
+                doc_codes.append(pdf_base_key)
+
+            for c in [parsed_data.get("order_id"), parsed_data.get("tracking_number"), parsed_data.get("invoice_number"), parsed_data.get("receipt_number")]:
+                if c and str(c).strip():
+                    doc_codes.append(str(c).strip())
+
+            # Check for HISTORICAL duplicates on Google Sheet
+            is_hist_dup = False
+            dup_msg = ""
+            for c in doc_codes:
+                if c and str(c).strip() and str(c).strip() in historical_codes:
+                    if pdf_base_key and c == pdf_base_key:
+                        continue
+                    is_hist_dup = True
+                    dup_msg = f"Trùng lặp lịch sử với mã chứng từ trên Sheet: {c}"
+                    break
+
+            # Check if this file belongs to an ALREADY PARSED invoice in the CURRENT batch
+            batch_match_index = None
+            if not is_hist_dup:
+                for c in doc_codes:
+                    if c and str(c).strip() and str(c).strip() in batch_invoice_map:
+                        batch_match_index = batch_invoice_map[str(c).strip()]
+                        break
+
+            if batch_match_index is not None and batch_match_index < len(staged_results):
+                # Smart Merge: Combine line_items into the existing staged invoice entry
+                existing_entry = staged_results[batch_match_index]
+                ex_parsed = existing_entry["parsed_data"]
+
+                for field in ["merchant_name", "seller_tax_id", "merchant_address", "merchant_phone", "merchant_email", "customer_name", "customer_address", "order_id", "invoice_number", "tracking_number", "transaction_date"]:
+                    if not ex_parsed.get(field) and parsed_data.get(field):
+                        ex_parsed[field] = parsed_data[field]
+
+                new_items = parsed_data.get("line_items") or []
+                ex_items = ex_parsed.get("line_items") or []
+                ex_items.extend(new_items)
+                ex_parsed["line_items"] = ex_items
+
+                if "page_files" not in existing_entry:
+                    existing_entry["page_files"] = [existing_entry["filename"]]
+                existing_entry["page_files"].append(file_name)
+                existing_entry["filename"] = f"{existing_entry['page_files'][0]} (+{len(existing_entry['page_files'])-1} trang)"
+
+                curr_idx = existing_entry["curr_idx"]
+                rows, meta = format_receipt_to_sheet_rows(ex_parsed, category_id=cat_id, current_index=curr_idx)
+                import urllib.parse
+                safe_name = urllib.parse.quote(existing_entry["filename"])
+                link_url = f"https://drive.google.com/file/d/{existing_entry['drive_file_id']}/view?name={safe_name}"
+                header_row, line_rows, meta_v2 = format_receipt_to_relational_v2(
+                    ex_parsed, category_id=cat_id, current_index=curr_idx, drive_link=link_url
+                )
+
+                existing_entry["formatted_rows"] = rows
+                existing_entry["header_row"] = header_row
+                existing_entry["line_rows"] = line_rows
+                existing_entry["meta_v2"] = meta_v2
+                logger.info(f"Smart Merged page file {file_name} into existing invoice {meta['dt_code']}")
+                continue
+
+            # Otherwise: New invoice entry in batch
+            max_indexes[cat_id] += 1
+            curr_idx = max_indexes[cat_id]
+
+            for c in doc_codes:
+                if c and str(c).strip():
+                    checker.add_code(str(c))
+
+            has_vat, vat_amt, vat_alert = check_vat_alert(parsed_data)
+            spell_warnings = validate_receipt_fields(parsed_data)
+
+            rows, meta = format_receipt_to_sheet_rows(parsed_data, category_id=cat_id, current_index=curr_idx)
+            import urllib.parse
+            safe_name = urllib.parse.quote(file_name)
+            link_url = f"https://drive.google.com/file/d/{file_id}/view?name={safe_name}"
+            header_row, line_rows, meta_v2 = format_receipt_to_relational_v2(
+                parsed_data, category_id=cat_id, current_index=curr_idx, drive_link=link_url
+            )
+
+            item_entry = {
+                "drive_file_id": file_id,
+                "filename": file_name,
+                "curr_idx": curr_idx,
+                "parsed_data": parsed_data,
+                "category": {"id": cat_id, "name": cat_name, "dt_code": meta["dt_code"]},
+                "warnings": {
+                    "is_duplicate": is_hist_dup,
+                    "duplicate_message": dup_msg,
+                    "has_vat": has_vat,
+                    "vat_amount": vat_amt,
+                    "vat_alert": vat_alert,
+                    "spell_warnings": spell_warnings
+                },
+                "formatted_rows": rows,
+                "header_row": header_row,
+                "line_rows": line_rows,
+                "meta_v2": meta_v2,
+                "buyer_address": parsed_data.get("customer_address") or "",
+                "approved": not is_hist_dup,
+                "engine_used": parsed_data.get("_engine_used", mode)
+            }
+
+            new_idx = len(staged_results)
+            staged_results.append(item_entry)
+
+            for c in doc_codes:
+                if c and str(c).strip():
+                    batch_invoice_map[str(c).strip()] = new_idx
 
         staged_receipts = staged_results
+        saved_file = save_result_to_output_dir(staged_results, prefix="ket_qua_quet_scan")
         return {
             "success": True,
             "total_processed": len(staged_results),
-            "staged": staged_results
+            "staged": staged_results,
+            "saved_to": saved_file
         }
     except Exception as e:
         logger.error(f"Batch processing error: {e}", exc_info=True)
@@ -488,129 +678,239 @@ async def process_drive_batch(
 @app.post("/api/v1/sheets/export")
 async def export_to_google_sheet(payload: Dict[str, Any] = Body(...)):
     """
-    Append approved rows into Google Sheet, export links, and auto-move files.
+    Append approved rows into Google Sheet (Data_Header_V2 and Data_Lines_V2), export links, and auto-move files.
     Guarded with scan_lock and pre-append duplicate filtering.
     """
-    rows_to_export: List[List[Any]] = payload.get("rows", [])
-    if not rows_to_export:
-        # Fallback to approved staged receipts
-        for item in staged_receipts:
-            if item.get("approved") and "formatted_rows" in item:
-                rows_to_export.extend(item["formatted_rows"])
+    headers_to_export = payload.get("headers", [])
+    lines_to_export = payload.get("lines", [])
+    rows_legacy_to_export = payload.get("rows", [])
 
-    if not rows_to_export:
+    # Fallback to approved staged receipts if payload arrays are empty
+    if not headers_to_export and not lines_to_export and not rows_legacy_to_export:
+        for item in staged_receipts:
+            if item.get("approved"):
+                if "header_row" in item and item["header_row"]:
+                    headers_to_export.append(item["header_row"])
+                if "line_rows" in item and item["line_rows"]:
+                    lines_to_export.extend(item["line_rows"])
+                if "formatted_rows" in item and item["formatted_rows"]:
+                    rows_legacy_to_export.extend(item["formatted_rows"])
+
+    if not headers_to_export and not lines_to_export and not rows_legacy_to_export:
         raise HTTPException(status_code=400, detail="Không có dòng dữ liệu nào được chọn để nhập vào Google Sheet.")
 
-    async with scan_lock:
+    async with sheet_write_lock:
         try:
             # 0. Live check against current sheet rows
-            sheet_rows = await asyncio.to_thread(google_service.get_sheet_data)
+            header_tab = os.getenv("GOOGLE_SHEET_HEADER_NAME", "Data_Header_V2")
+            sheet_rows = await asyncio.to_thread(google_service.get_sheet_data, None, header_tab)
             checker = DuplicateChecker()
-            checker.load_from_sheet_rows(sheet_rows)
+            checker.load_from_header_v2_rows(sheet_rows)
 
-            filtered_rows = []
-            for r in rows_to_export:
-                if not r or len(r) == 0:
+            filtered_headers = []
+            filtered_dt_codes = set()
+
+            for h in headers_to_export:
+                if not h or len(h) == 0:
                     continue
-                dt_code = str(r[0]).strip() if len(r) > 0 else ""
-                order_id = str(r[5]).strip() if len(r) > 5 else (str(r[4]).strip() if len(r) > 4 else "")
-                
+                dt_code = str(h[0]).strip() if len(h) > 0 else ""
+                doc_code = str(h[5]).strip() if len(h) > 5 else ""
+
                 # Check duplicate
                 if dt_code and dt_code.startswith("DT") and checker.check_duplicate(dt_code)[0]:
-                    logger.warning(f"Export skipped row {dt_code}: DT Code already exists in Sheet.")
+                    logger.warning(f"Export skipped header {dt_code}: DT Code already exists in Sheet.")
                     continue
-                if order_id and len(order_id) >= 6 and checker.check_duplicate(order_id)[0]:
-                    logger.warning(f"Export skipped row {dt_code}: Order/Doc ID '{order_id}' already exists in Sheet.")
+                if doc_code and len(doc_code) >= 6 and checker.check_duplicate(doc_code)[0]:
+                    logger.warning(f"Export skipped header {dt_code}: Order/Doc ID '{doc_code}' already exists in Sheet.")
                     continue
 
-                filtered_rows.append(r)
+                filtered_headers.append(h)
+                filtered_dt_codes.add(dt_code)
                 if dt_code:
                     checker.add_code(dt_code)
-                if order_id:
-                    checker.add_code(order_id)
+                if doc_code:
+                    checker.add_code(doc_code)
 
-            if not filtered_rows:
-                return {
-                    "success": True,
-                    "message": "Các dòng hóa đơn được chọn ĐÃ TỒN TẠI trên Google Sheet (hệ thống tự động bỏ qua để tránh trùng lặp).",
-                    "updated_rows": 0
-                }
+            # Filter matching lines
+            filtered_lines = [l for l in lines_to_export if l and len(l) > 0 and str(l[0]).strip() in filtered_dt_codes]
 
-            # 1. Export main data
-            res = await asyncio.to_thread(google_service.append_rows_to_sheet, filtered_rows)
-            
-            # 2. Export links and move files
-            exported_dt_codes = {row[0] for row in filtered_rows if row and len(row) > 0}
-            link_rows = []
+            # 1. Export V2 Relational Data
+            res_v2 = None
+            if filtered_headers or filtered_lines:
+                res_v2 = await asyncio.to_thread(google_service.append_relational_v2, filtered_headers, filtered_lines)
+
+            # 3. Move processed files in Google Drive
             moved_files = 0
             processed_folder_id = os.getenv("GOOGLE_DRIVE_PROCESSED_FOLDER_ID")
-
             for item in staged_receipts:
                 if "category" in item and "dt_code" in item["category"]:
                     dt_code = item["category"]["dt_code"]
-                    if dt_code in exported_dt_codes:
+                    if dt_code in filtered_dt_codes:
                         drive_id = item.get("drive_file_id")
-                        filename = item.get("filename", "")
-                        
-                        if drive_id:
-                            link_url = f"https://drive.google.com/file/d/{drive_id}/view"
-                            link_rows.append([dt_code, filename, link_url])
-                            
-                            if processed_folder_id:
-                                if await asyncio.to_thread(google_service.move_file_to_folder, drive_id, processed_folder_id):
-                                    moved_files += 1
+                        if drive_id and processed_folder_id:
+                            if await asyncio.to_thread(google_service.move_file_to_folder, drive_id, processed_folder_id):
+                                moved_files += 1
 
-            # Append unique link rows to secondary sheet
-            unique_links = []
-            seen_dt = set()
-            for r in link_rows:
-                if r[0] not in seen_dt:
-                    unique_links.append(r)
-                    seen_dt.add(r[0])
-                    
-            if unique_links:
-                await asyncio.to_thread(google_service.append_links_to_sheet, unique_links)
-
-            message = f"Đã nhập thành công {len(filtered_rows)} dòng vào Google Sheet!"
+            headers_count = len(filtered_headers)
+            lines_count = len(filtered_lines)
+            message = f"Đã nhập thành công {headers_count} Hóa đơn ({lines_count} dòng mặt hàng) vào Google Sheet V2!"
             if moved_files > 0:
                 message += f" Đã di chuyển {moved_files} ảnh vào thư mục Đã Xử Lý."
-                
+
             return {
                 "success": True,
                 "message": message,
-                "details": res
+                "headers_count": headers_count,
+                "lines_count": lines_count,
+                "details": res_v2
             }
         except Exception as e:
             logger.error(f"Sheet export error: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Lỗi nhập vào Google Sheet: {str(e)}")
 
 
-@app.post("/api/v1/sheets/deduplicate")
-async def trigger_deduplication():
+# NOTE: The one-time V1->V2 migration endpoint (`POST /api/v1/sheets/migrate-v2`)
+# was removed after the flat V1 tables (Bang_Ke_Hoa_Don / Links_Hoa_Don) were
+# retired. The migration itself is complete; `ops/migrations/migrate_to_v2.py`
+# is kept only as a historical record.
+
+
+@app.post("/api/v1/sheets/format-lines-numeric")
+async def trigger_format_lines_numeric():
     """
-    Purge duplicate entries across Bang_Ke_Hoa_Don and Links_Hoa_Don.
+    Format all existing and future columns F to K in Data_Lines_V2 to pure numeric types and number formatting.
     """
-    async with scan_lock:
+    async with sheet_write_lock:
         try:
-            res = await asyncio.to_thread(google_service.deduplicate_all_sheets)
+            from ops.scripts.format_data_lines_v2_numeric import format_data_lines_v2_columns_f_to_k
+            res = await asyncio.to_thread(format_data_lines_v2_columns_f_to_k)
             return res
         except Exception as e:
-            logger.error(f"Deduplication error: {e}")
-            raise HTTPException(status_code=500, detail=f"Lỗi khi dọn dẹp trùng lặp: {str(e)}")
+            logger.error(f"Format lines numeric error: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Lỗi định dạng số Data_Lines_V2: {str(e)}")
 
-@app.get("/api/v1/drive/image/{file_id}")
-async def get_drive_image_proxy(file_id: str):
+
+@app.get("/api/v1/sheets/reconcile-totals")
+@app.post("/api/v1/sheets/reconcile-totals")
+async def reconcile_sheet_totals():
     """
-    Stream image bytes from Google Drive for iframe/img rendering with client & disk caching.
+    Audit and compare total payment amounts between Data_Header_V2 and Data_Lines_V2.
     """
     try:
-        content, mime = await asyncio.to_thread(google_service.download_file_bytes, file_id, True)
+        from services.business_rules import clean_num
+        header_tab = os.getenv("GOOGLE_SHEET_HEADER_NAME", "Data_Header_V2")
+        lines_tab = os.getenv("GOOGLE_SHEET_LINES_NAME", "Data_Lines_V2")
+        target_sheet_id = os.getenv("GOOGLE_SHEET_ID")
+
+        header_rows = await asyncio.to_thread(google_service.get_sheet_data, target_sheet_id, header_tab) or []
+        lines_rows = await asyncio.to_thread(google_service.get_sheet_data, target_sheet_id, lines_tab) or []
+
+        headers_map = {}
+        total_header_sum = 0.0
+        for r in header_rows[1:]:
+            if not r: continue
+            dt_code = str(r[0]).strip().upper()
+            if not dt_code.startswith("DT"): continue
+            final_amt = clean_num(r[9]) if len(r) > 9 else 0.0
+            company = str(r[2]).strip() if len(r) > 2 else ""
+            headers_map[dt_code] = {"company": company, "final": final_amt}
+            total_header_sum += final_amt
+
+        lines_map = {}
+        total_lines_sum = 0.0
+        for r in lines_rows[1:]:
+            if not r: continue
+            dt_code = str(r[0]).strip().upper()
+            if not dt_code.startswith("DT"): continue
+            row_total = clean_num(r[10]) if len(r) > 10 else 0.0
+            if dt_code not in lines_map:
+                lines_map[dt_code] = {"count": 0, "sum": 0.0}
+            lines_map[dt_code]["count"] += 1
+            lines_map[dt_code]["sum"] += row_total
+            total_lines_sum += row_total
+
+        all_dts = sorted(list(set(list(headers_map.keys()) + list(lines_map.keys()))))
+        exact_match = 0
+        rounding_match = 0
+        discrepancies = []
+
+        for dt in all_dts:
+            h_info = headers_map.get(dt)
+            l_info = lines_map.get(dt)
+            if not h_info or not l_info:
+                discrepancies.append({
+                    "dt_code": dt,
+                    "company": (h_info or {}).get("company", "Chưa rõ"),
+                    "header_total": (h_info or {}).get("final", 0.0),
+                    "lines_total": (l_info or {}).get("sum", 0.0),
+                    "diff": abs(((h_info or {}).get("final", 0.0)) - ((l_info or {}).get("sum", 0.0))),
+                    "reason": "Thiếu dữ liệu ở 1 trong 2 bảng"
+                })
+                continue
+
+            h_val = h_info["final"]
+            h_disc = h_info.get("disc", 0.0)
+            h_vat = h_info.get("vat", 0.0)
+            l_val = l_info["sum"]
+            expected_from_lines = l_val - h_disc + h_vat
+            diff = round(abs(h_val - expected_from_lines), 2)
+            if diff == 0:
+                exact_match += 1
+            elif diff <= 1000:
+                rounding_match += 1
+            else:
+                discrepancies.append({
+                    "dt_code": dt,
+                    "company": h_info["company"],
+                    "header_total": h_val,
+                    "lines_total": l_val,
+                    "header_discount": h_disc,
+                    "diff": diff,
+                    "reason": "Lệch số tiền"
+                })
+
+        return {
+            "success": True,
+            "total_header_sum": total_header_sum,
+            "total_lines_sum": total_lines_sum,
+            "overall_diff": round(total_header_sum - total_lines_sum, 2),
+            "total_invoices": len(headers_map),
+            "exact_match_count": exact_match,
+            "rounding_match_count": rounding_match,
+            "discrepancy_count": len(discrepancies),
+            "discrepancies": discrepancies
+        }
+    except Exception as e:
+        logger.error(f"Reconciliation error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Lỗi đối chiếu số liệu 2 sheet: {str(e)}")
+
+
+
+
+@app.api_route("/api/v1/drive/image/{file_id}", methods=["GET", "HEAD"])
+async def get_drive_image_proxy(file_id: str):
+    """
+    Stream image or PDF bytes from Google Drive for iframe/img rendering with proper MIME header & client disk caching.
+    """
+    try:
+        content, filename = await asyncio.to_thread(google_service.download_file_bytes, file_id, True)
+        fn_lower = str(filename or "").lower()
+        if fn_lower.endswith(".pdf") or content.startswith(b"%PDF"):
+            media_type = "application/pdf"
+        elif fn_lower.endswith(".png"):
+            media_type = "image/png"
+        elif fn_lower.endswith(".webp"):
+            media_type = "image/webp"
+        else:
+            media_type = "image/jpeg"
+
         return Response(
             content=content,
-            media_type=mime or "image/jpeg",
+            media_type=media_type,
             headers={
                 "Cache-Control": "public, max-age=604800, immutable",
-                "X-Cache-Status": "HIT"
+                "X-Cache-Status": "HIT",
+                "Content-Disposition": f"inline; filename=\"{filename}\""
             }
         )
     except Exception as e:
@@ -636,38 +936,250 @@ async def get_historical_records():
 @app.put("/api/v1/sheets/record")
 async def update_sheet_record(payload: dict):
     """
-    Update a specific record row in Google Sheet by dt_code.
-    Expects: { dt_code, row: [A, B, C, ... M] }
+    Update a specific record in Google Sheet by dt_code.
+    Supports relational format { dt_code, header_row, line_rows } or legacy { dt_code, row }.
+    Supports safe Category Migration (DTX -> DTY) with automatic sequential MAX+1 ID allocation.
     """
+    from services.google_service import clean_dt_code
+    from services.business_rules import parse_vietnamese_number, normalize_datetime_vn
+
     dt_code = payload.get("dt_code", "").strip()
-    row = payload.get("row", [])
-    if not dt_code or not row:
-        raise HTTPException(status_code=400, detail="Thiếu dt_code hoặc row data.")
+    header_row = payload.get("header_row")
+    line_rows = payload.get("line_rows")
+    row = payload.get("row")
+
+    if not dt_code:
+        raise HTTPException(status_code=400, detail="Thiếu mã dt_code.")
+
+    dt_clean = clean_dt_code(dt_code)
+
     try:
-        result = await asyncio.to_thread(google_service.update_sheet_row, dt_code, row)
+        # Determine original category
+        orig_match = re.match(r"^(DT[1-4])", dt_clean.upper())
+        orig_cat = orig_match.group(1) if orig_match else "DT2"
+
+        # Determine requested category
+        target_cat = ""
+        category_hint = payload.get("category") or payload.get("form_type")
+        if category_hint:
+            cat_match = re.match(r"^(DT[1-4])", str(category_hint).strip().upper())
+            if cat_match:
+                target_cat = cat_match.group(1)
+
+        if not target_cat:
+            if header_row and len(header_row) > 0 and header_row[0]:
+                h_match = re.match(r"^(DT[1-4])", str(header_row[0]).strip().upper())
+                if h_match:
+                    target_cat = h_match.group(1)
+            elif row and len(row) > 0 and row[0]:
+                r_match = re.match(r"^(DT[1-4])", str(row[0]).strip().upper())
+                if r_match:
+                    target_cat = r_match.group(1)
+
+        if not target_cat:
+            target_cat = orig_cat
+
+        # -------------------------------------------------------------
+        # CASE 1: CATEGORY MIGRATION (DTX -> DTY with X != Y)
+        # -------------------------------------------------------------
+        if orig_cat != target_cat and target_cat in ["DT1", "DT2", "DT3", "DT4"]:
+            new_cat_num = int(target_cat.replace("DT", ""))
+            max_indexes = await asyncio.to_thread(google_service.get_max_indexes_by_category)
+            next_idx = max_indexes.get(new_cat_num, 0) + 1
+            new_dt_code = f"DT{new_cat_num}{next_idx:04d}"
+
+            logger.info(f"Triggering Category Migration: {dt_clean} ({orig_cat}) -> {new_dt_code} ({target_cat})")
+
+            # Preserve Link Drive and Confirmed status from old record
+            drive_link = payload.get("drive_link") or ""
+            confirmed_status = ""
+            try:
+                all_headers = await asyncio.to_thread(google_service.get_sheet_data, None, "Data_Header_V2") or []
+                for r in all_headers:
+                    if r and len(r) > 0 and clean_dt_code(r[0]) == dt_clean:
+                        if not drive_link:
+                            if len(r) > 11 and ("drive.google.com" in str(r[11]) or str(r[11]).startswith("http")):
+                                drive_link = str(r[11]).strip()
+                            elif len(r) > 10 and ("drive.google.com" in str(r[10]) or str(r[10]).startswith("http")):
+                                drive_link = str(r[10]).strip()
+                            else:
+                                for c in r:
+                                    c_str = str(c).strip()
+                                    if "drive.google.com" in c_str or c_str.startswith("http"):
+                                        drive_link = c_str
+                                        break
+                        if len(r) > 13:
+                            confirmed_status = str(r[13] or "").strip()
+                        break
+            except Exception as e:
+                logger.warning(f"Could not retrieve existing Drive link for {dt_clean}: {e}")
+
+            # Build final header_row and line_rows for new_dt_code
+            if target_cat == "DT1":
+                # Convert to DT1 format
+                if row and len(row) >= 12:
+                    upd = list(row)
+                    while len(upd) < 14:
+                        upd.append("")
+                    date_val = normalize_datetime_vn(str(upd[1]).strip(), prefix_quote=True)
+                    company_val = str(upd[2]).strip()
+                    seller_addr = str(upd[3]).strip()
+                    buyer_addr = str(upd[4]).strip()
+                    order_id = str(upd[5]).strip()
+                    if order_id.startswith('0') and len(order_id) > 1:
+                        order_id = "'" + order_id
+                    description = str(upd[6]).strip()
+                    qty_num = parse_vietnamese_number(upd[7]) or 1
+                    price_num = parse_vietnamese_number(upd[8])
+                    vat_rate = str(upd[9]).strip() or "0%"
+                    vat_num = parse_vietnamese_number(upd[10])
+                    tot_num = parse_vietnamese_number(upd[11])
+                    buyer_name = str(upd[12]).strip()
+                    notes = str(upd[13]).strip()
+                    raw_total = qty_num * price_num if qty_num > 0 and price_num > 0 else (tot_num - vat_num)
+
+                    final_header = [
+                        new_dt_code, date_val, company_val, seller_addr, buyer_addr,
+                        order_id, raw_total, 0, vat_num, tot_num, buyer_name,
+                        drive_link, notes, confirmed_status
+                    ]
+                    final_lines = [[
+                        new_dt_code, "", description or "Đơn hàng TMĐT", qty_num, "Đơn",
+                        price_num, 0, 0, vat_rate, vat_num, tot_num, notes
+                    ]]
+                elif header_row and len(header_row) >= 10:
+                    h_copy = list(header_row)
+                    while len(h_copy) < 14:
+                        h_copy.append("")
+                    h_copy[0] = new_dt_code
+                    h_copy[11] = drive_link or h_copy[11]
+                    h_copy[13] = confirmed_status or h_copy[13]
+                    final_header = h_copy
+
+                    first_line_name = ""
+                    first_line_price = h_copy[9] or 0
+                    if line_rows and len(line_rows) > 0 and len(line_rows[0]) > 2:
+                        first_line_name = str(line_rows[0][2] or "").strip()
+                        if len(line_rows[0]) > 5:
+                            first_line_price = line_rows[0][5]
+
+                    final_lines = [[
+                        new_dt_code, "", first_line_name or "Đơn hàng TMĐT", 1, "Đơn",
+                        first_line_price, 0, 0, "0%", h_copy[8] or 0, h_copy[9] or 0, h_copy[12] or ""
+                    ]]
+                else:
+                    raise HTTPException(status_code=400, detail="Dữ liệu chuyển đổi DT1 không hợp lệ.")
+            else:
+                # Target is DT2, DT3, or DT4
+                if header_row and line_rows is not None:
+                    h_copy = list(header_row)
+                    while len(h_copy) < 14:
+                        h_copy.append("")
+                    h_copy[0] = new_dt_code
+                    h_copy[11] = drive_link or h_copy[11]
+                    h_copy[13] = confirmed_status or h_copy[13]
+                    final_header = h_copy
+
+                    final_lines = []
+                    for lr in line_rows:
+                        lr_copy = list(lr)
+                        while len(lr_copy) < 14:
+                            lr_copy.append("")
+                        lr_copy[0] = new_dt_code
+                        # If target is DT3, filter out '(loại bỏ)'
+                        if target_cat == "DT3":
+                            item_name = str(lr_copy[2] or "").lower()
+                            if "(loại bỏ)" in item_name or "(loai bo)" in item_name:
+                                continue
+                        final_lines.append(lr_copy)
+                    if not final_lines:
+                        final_lines = [[new_dt_code, "", "Mặt hàng chi tiết", 1, "Cái", 0, 0, 0, "0%", 0, 0, ""]]
+                elif row and len(row) >= 12:
+                    # Convert flat row to Relational Header + Line
+                    upd = list(row)
+                    while len(upd) < 14:
+                        upd.append("")
+                    date_val = normalize_datetime_vn(str(upd[1]).strip(), prefix_quote=True)
+                    company_val = str(upd[2]).strip()
+                    seller_addr = str(upd[3]).strip()
+                    buyer_addr = str(upd[4]).strip()
+                    order_id = str(upd[5]).strip()
+                    if order_id.startswith('0') and len(order_id) > 1:
+                        order_id = "'" + order_id
+                    description = str(upd[6]).strip()
+                    qty_num = parse_vietnamese_number(upd[7]) or 1
+                    price_num = parse_vietnamese_number(upd[8])
+                    vat_rate = str(upd[9]).strip() or "0%"
+                    vat_num = parse_vietnamese_number(upd[10])
+                    tot_num = parse_vietnamese_number(upd[11])
+                    buyer_name = str(upd[12]).strip()
+                    notes = str(upd[13]).strip()
+                    raw_total = qty_num * price_num if qty_num > 0 and price_num > 0 else (tot_num - vat_num)
+
+                    final_header = [
+                        new_dt_code, date_val, company_val, seller_addr, buyer_addr,
+                        order_id, raw_total, 0, vat_num, tot_num, buyer_name,
+                        drive_link, notes, confirmed_status
+                    ]
+                    final_lines = [[
+                        new_dt_code, "", description or "Mặt hàng", qty_num, "Cái",
+                        price_num, 0, 0, vat_rate, vat_num, tot_num, notes
+                    ]]
+                else:
+                    raise HTTPException(status_code=400, detail="Dữ liệu chuyển đổi không hợp lệ.")
+
+            # Chuẩn hóa final_lines lên 14 cột (A→N): gán Nhóm hàng (M) + nguồn (N).
+            final_lines = _fill_line_group_columns(final_lines, new_dt_code)
+
+            # 1. Delete old record (WITHOUT deleting Google Drive file)
+            await asyncio.to_thread(google_service.delete_sheet_record, dt_clean, delete_drive_file=False)
+
+            # 2. Append new record safely to Google Sheet
+            await asyncio.to_thread(google_service.append_relational_v2, [final_header], final_lines)
+
+            logger.info(f"Successfully migrated {dt_clean} -> {new_dt_code} ({len(final_lines)} lines).")
+            return {
+                "success": True,
+                "message": f"Đã chuyển đổi thành công từ {dt_clean} sang {new_dt_code}.",
+                "new_dt_code": new_dt_code,
+                "dt_code": new_dt_code,
+                "lines_count": len(final_lines),
+                "header_row": final_header,
+                "line_rows": final_lines
+            }
+
+        # -------------------------------------------------------------
+        # CASE 2: NORMAL RECORD UPDATE WITHIN SAME CATEGORY
+        # -------------------------------------------------------------
+        result = await asyncio.to_thread(google_service.dispatch_pipeline, dt_clean, payload)
         if result.get("success"):
-            return {"success": True, "message": f"Đã cập nhật {result['updated_rows']} dòng cho {dt_code}."}
+            lines_cnt = result.get("lines_count", 1)
+            return {
+                "success": True,
+                "message": f"Đã cập nhật thành công hóa đơn {dt_clean} ({lines_cnt} dòng mặt hàng) qua Nhà Máy Xử Lý V2.",
+                "dt_code": dt_clean,
+                "lines_count": lines_cnt,
+                "header_row": result.get("header_row"),
+                "line_rows": result.get("line_rows")
+            }
         else:
             raise HTTPException(status_code=400, detail=result.get("error", "Cập nhật thất bại."))
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error updating sheet record {dt_code}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Lỗi cập nhật Sheet: {str(e)}")
 
 @app.post("/api/v1/sheets/confirm")
 async def confirm_sheet_record(payload: dict = Body(...)):
     """
-    Confirm or reject a receipt in Links_Hoa_Don (marks 'x' in Column D if confirmed, clears if rejected).
+    Confirm or reject a receipt in Data_Header_V2 (marks 'x' in Column N if confirmed, clears if rejected).
     """
     dt_code = payload.get("dt_code", "").strip()
     status = payload.get("status", "x").strip()
-    row = payload.get("row")
     if not dt_code:
         raise HTTPException(status_code=400, detail="Thiếu dt_code")
     try:
-        if row and isinstance(row, list) and len(row) >= 11:
-            await asyncio.to_thread(google_service.update_sheet_row, dt_code, row)
-
         res = await asyncio.to_thread(google_service.confirm_receipt_in_links, dt_code, status=status)
         if not res.get("success"):
             raise HTTPException(status_code=400, detail=res.get("error", "Lỗi xác nhận."))
@@ -681,7 +1193,8 @@ async def confirm_sheet_record(payload: dict = Body(...)):
 @app.delete("/api/v1/sheets/record/{dt_code}")
 async def delete_sheet_record(dt_code: str):
     """
-    Permanently delete a record from Bang_Ke_Hoa_Don and Links_Hoa_Don.
+    Permanently delete a record from Data_Header_V2 and Data_Lines_V2
+    (and its Drive image file).
     """
     clean_dt = dt_code.strip()
     if not clean_dt:
@@ -733,6 +1246,181 @@ async def extract_raw_ocr(file: UploadFile = File(...), lang: str = Form("eng+vi
         logger.error(f"Tesseract OCR error: {e}")
         raise HTTPException(status_code=500, detail=f"Tesseract OCR failed: {str(e)}")
 
+@app.get("/api/v1/drive/unprocessed-files")
+async def get_unprocessed_files():
+    """Get list of files from unprocessed folder"""
+    try:
+        folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+        if not folder_id:
+            return {"files": []}
+            
+        files = await asyncio.to_thread(
+            google_service.drive_service.files().list(
+                q=f"'{folder_id}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+                fields="files(id, name, mimeType)",
+                pageSize=50
+            ).execute
+        )
+        return {"files": files.get("files", [])}
+    except Exception as e:
+        logger.error(f"Error fetching unprocessed files: {e}")
+        return {"files": []}
+
+@app.post("/api/v1/manual-entry")
+async def manual_entry(data: dict = Body(...)):
+    """
+    Handle manual receipt entry.
+    Moves image to processed folder, appends to Data_Header_V2 and Data_Lines_V2.
+    """
+    try:
+        file_id = data.get("file_id")
+        filename = data.get("filename")
+        if not file_id:
+            raise HTTPException(status_code=400, detail="Thiếu file_id")
+
+        category_str = data.get("category", "DT4")
+        cat_id_match = re.search(r'\d+', category_str)
+        cat_id = int(cat_id_match.group()) if cat_id_match else 4
+        
+        # Determine dt_code
+        max_indexes = await asyncio.to_thread(google_service.get_max_indexes_by_category)
+        new_index = max_indexes.get(cat_id, 0) + 1
+        dt_code = f"DT{cat_id}{new_index:04d}"
+        
+        # Move file to processed folder
+        processed_folder_id = os.getenv("GOOGLE_DRIVE_PROCESSED_FOLDER_ID") or os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+        success = await asyncio.to_thread(
+            google_service.move_file_to_folder,
+            file_id,
+            processed_folder_id
+        )
+        
+        if not success:
+            logger.warning(f"Could not move file {file_id}, but will proceed with manual entry")
+            
+        link_url = f"https://drive.google.com/file/d/{file_id}/view"
+        
+        header_row = data.get("header_row")
+        line_rows = data.get("line_rows")
+
+        if header_row and line_rows is not None:
+            # Replace placeholder DT code in header & lines
+            header_row[0] = dt_code
+            header_row[11] = link_url
+            for l in line_rows:
+                l[0] = dt_code
+
+            line_rows = _fill_line_group_columns(line_rows, dt_code)
+            await asyncio.to_thread(google_service.append_relational_v2, [header_row], line_rows)
+        else:
+            # DT1 single-line manual entry -> V2 relational schema
+            # (Data_Header_V2 = 14 cols A→N; Data_Lines_V2 = 14 cols A→N, cols M/N
+            #  "Nhóm hàng" filled by _fill_line_group_columns before the append).
+            from services.business_rules import clean_num
+
+            raw_amt = clean_num(data.get("unit_price", 0))
+            disc_amt = clean_num(data.get("discount_amount", 0))
+            vat_amt = clean_num(data.get("vat_amount", 0))
+            total_amt = clean_num(data.get("total_amount", 0))
+            vat_rate_str = str(data.get("vat_rate", "0")).replace("%", "").strip() or "0"
+            notes = data.get("notes", "")
+
+            # A  B     C        D              E              F         G       H        I       J        K          L        M      N
+            h_row = [
+                dt_code,
+                data.get("date", ""),
+                data.get("company", ""),
+                data.get("seller_address", ""),
+                data.get("buyer_address", ""),
+                data.get("order_id", ""),
+                raw_amt,
+                disc_amt,
+                vat_amt,
+                total_amt,
+                data.get("buyer_name", ""),
+                link_url,
+                notes,
+                "",
+            ]
+            # A  B   C              D          E          F        G          H          I       J          K
+            l_row = [
+                dt_code,
+                "",
+                data.get("description", ""),
+                clean_num(data.get("quantity", 1)),
+                "",
+                raw_amt,
+                disc_amt,
+                0,
+                clean_num(vat_rate_str),
+                vat_amt,
+                total_amt,
+                notes,
+            ]
+            l_rows = _fill_line_group_columns([l_row], dt_code)
+            await asyncio.to_thread(google_service.append_relational_v2, [h_row], l_rows)
+
+        return {"success": True, "dt_code": dt_code, "message": f"Lưu thành công hóa đơn [{dt_code}] vào Sheet V2!"}
+    except Exception as e:
+        logger.error(f"Error in manual entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# RECONCILIATION API ENDPOINTS (v2.8.0)
+# =============================================================================
+@app.post("/api/v1/reconcile/run")
+async def trigger_reconciliation(period: str = Body(..., embed=True)):
+    """
+    Trigger automated reconciliation for a specific period YYYYMM.
+    """
+    try:
+        from services.reconciliation_engine import run_reconciliation
+        summary = await run_reconciliation(period, google_service)
+        return {"success": True, "message": f"Đối soát kỳ {period} hoàn tất.", "summary": summary}
+    except Exception as e:
+        logger.error(f"Reconciliation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/reconcile/status/{period}")
+async def get_reconciliation_status(period: str):
+    """
+    Check if a report tab exists for the given period.
+    """
+    try:
+        report_tab = f"Reconciliation_Report_{period}"
+        spreadsheet_id = os.getenv("RECON_SPREADSHEET_ID") or os.getenv("GOOGLE_SHEET_ID")
+        # Read from Google Sheets metadata to verify
+        metadata = await asyncio.to_thread(google_service.sheets_service.spreadsheets().get, spreadsheetId=spreadsheet_id)
+        sheets = metadata.execute().get("sheets", [])
+        exists = any(s.get("properties", {}).get("title") == report_tab for s in sheets)
+        return {"success": True, "exists": exists}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/v1/reconcile/report/{period}")
+async def get_reconciliation_report(period: str):
+    """
+    Fetch the reconciliation report rows from Google Sheet for the given period YYYYMM.
+    """
+    try:
+        report_tab = f"Reconciliation_Report_{period}"
+        spreadsheet_id = os.getenv("RECON_SPREADSHEET_ID") or os.getenv("GOOGLE_SHEET_ID")
+        rows = await asyncio.to_thread(google_service.get_sheet_data, spreadsheet_id, report_tab)
+        if not rows:
+            return {"success": True, "records": []}
+        
+        headers = rows[0]
+        records = []
+        for r in rows[1:]:
+            record = {}
+            for idx, h in enumerate(headers):
+                record[h] = r[idx] if idx < len(r) else ""
+            records.append(record)
+            
+        return {"success": True, "records": records}
+    except Exception as e:
+        logger.error(f"Error fetching reconciliation report for {period}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # =============================================================================
 # WEB DASHBOARD (HTML / JS / CSS)
@@ -1068,7 +1756,7 @@ async def dashboard_ui():
                     </button>
                 </nav>
                 <div class="sidebar-footer">
-                    <div class="connection-pill"><span class="pulse"></span><span>Localhost API · Port 8000</span></div>
+                    <div class="connection-pill"><span class="pulse"></span><span>Localhost API · Port 8080</span></div>
                     <small>v2.0 · Hybrid Online / Offline</small>
                 </div>
             </aside>
@@ -1364,12 +2052,22 @@ async def dashboard_ui():
                 document.getElementById('prevBtn').disabled = currentReceiptIndex === 0;
                 document.getElementById('nextBtn').disabled = currentReceiptIndex === dataArray.length - 1;
                 document.getElementById('previewFileName').textContent = item.filename || '—';
-                const preview = document.getElementById('receiptPreview');
-                const url = item.drive_file_id ? `https://drive.google.com/file/d/${encodeURIComponent(item.drive_file_id)}/preview` : '';
+                const fn = String(item.filename || item.name || '').toLowerCase();
+                const isPdf = fn.endsWith('.pdf') || (item.mimeType && item.mimeType.includes('pdf'));
+                const fileUrl = item.drive_file_id ? `/api/v1/drive/image/${encodeURIComponent(item.drive_file_id)}#toolbar=1&navpanes=1` : '';
+                const driveUrl = item.drive_file_id ? `https://drive.google.com/file/d/${encodeURIComponent(item.drive_file_id)}/preview` : '';
                 const fullscreen = document.getElementById('fullscreenBtn');
-                fullscreen.disabled = !url;
-                fullscreen.dataset.url = url;
-                preview.innerHTML = url ? `<iframe src="${url}" title="Ảnh hóa đơn ${escapeHtml(item.filename || '')}" loading="lazy" allow="autoplay"></iframe>` : `<div class="preview-empty"><div class="empty-copy"><div class="empty-icon">!</div><h3>Không có link ảnh</h3><p>Hóa đơn này không chứa drive_file_id để xem ảnh gốc.</p></div></div>`;
+                fullscreen.disabled = !driveUrl;
+                fullscreen.dataset.url = driveUrl;
+                if (fileUrl) {
+                    if (isPdf) {
+                        preview.innerHTML = `<iframe src="${fileUrl}" style="width:100%; height:100%; min-height:550px; border:none;" title="Hóa đơn PDF ${escapeHtml(item.filename || '')}" allow="autoplay"></iframe>`;
+                    } else {
+                        preview.innerHTML = `<img src="${fileUrl}" alt="Ảnh hóa đơn ${escapeHtml(item.filename || '')}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
+                    }
+                } else {
+                    preview.innerHTML = `<div class="preview-empty"><div class="empty-copy"><div class="empty-icon">!</div><h3>Không có link ảnh</h3><p>Hóa đơn này không chứa drive_file_id để xem ảnh gốc.</p></div></div>`;
+                }
             }
             function navigateReceipt(direction) { 
                 const dataArray = window.isHistoryMode ? window.historicalData : window.stagedData;
@@ -1404,8 +2102,8 @@ async def dashboard_ui():
                     // For money fields, strip ' VND' formatting to get raw number
                     let val = el.tagName === 'TEXTAREA' ? el.value : el.value;
                     // Remove VND suffix and thousand-separator dots
-                    val = val.replace(/\s*VNĐ$/, '').replace(/\./g, '').replace(/,/g, '.');
-                    return isNaN(Number(val)) || val.trim() === '' ? el.value.replace(/\s*VNĐ$/, '').trim() : val.trim();
+                    val = val.replace(/\\s*VNĐ$/, '').replace(/\\./g, '').replace(/,/g, '.');
+                    return isNaN(Number(val)) || val.trim() === '' ? el.value.replace(/\\s*VNĐ$/, '').trim() : val.trim();
                 });
             }
             
@@ -1498,7 +2196,7 @@ async def dashboard_ui():
                             let cat_id = parseInt(catStr) || 4;
                             let drive_id = '';
                             if (r.file_info.link) {
-                                let match = r.file_info.link.match(/\/d\/(.+?)\//);
+                                let match = r.file_info.link.match(/\\/d\\/(.+?)\\//);
                                 if (match) drive_id = match[1];
                             }
                             return {
@@ -1606,3 +2304,4 @@ async def dashboard_ui():
     </body>
     </html>
     """
+

@@ -7,9 +7,29 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: No runtime artefacts committed
+      run: |
+        bad=$(git ls-files -- 'cache/**' 'ket_qua/**' 'ops/backups/**' 'archive/backups/**' '**/sheet_item_analysis.json' || true)
+        if [ -n "$bad" ]; then
+          echo "::error::Runtime artefacts are tracked in git:"; echo "$bad"; exit 1
+        fi
+
+    - name: No stray scripts at the repo root
+      run: |
+        stray=$(git ls-files --full-name -- ':(top)*.py' | grep -vE '^(server|conftest|init_frontend)\.py$' || true)
+        if [ -n "$stray" ]; then
+          echo "::error::Unexpected .py at repo root (put tools in ops/, tests in tests/):"; echo "$stray"; exit 1
+        fi
+
   test:
     runs-on: ubuntu-latest
-
+    needs: hygiene
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -32,4 +52,4 @@ jobs:
 
     - name: Run Test Suite
       run: |
-        python test_suite.py
+        python -m pytest -q

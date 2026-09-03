@@ -2,11 +2,18 @@ services:
   procurement-server:
     build: .
     container_name: procurement-server
+    command: uvicorn server:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - .:/app
+      - ../Thực tập tốt nghiệp/Kết quả:/app/ket_qua
+    environment:
+      - OUTPUT_DIR=/app/ket_qua
     env_file: .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    labels:
+      version: "2.12.0"
+      description: "Procurement Receipt OCR - Visual Split Resizer & Excel Column Resizing v2.12.0"
     restart: unless-stopped
 
   frontend:

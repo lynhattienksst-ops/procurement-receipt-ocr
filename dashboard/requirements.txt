@@ -1,0 +1,7 @@
+# Dashboard micro-service (Cloud Run) — deliberately minimal, independent of the
+# root requirements.txt (no OCR / imaging / gspread deps). Unpinned to match the
+# repo convention; pin here if repeatable builds become a concern.
+fastapi
+uvicorn[standard]
+google-auth
+google-api-python-client
